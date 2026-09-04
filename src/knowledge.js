@@ -16,8 +16,8 @@ function tokenize(text) {
 }
 
 class KnowledgeBase {
-  constructor(config) {
-    this.channelIds = config.knowledgeChannelIds;
+  constructor(config, guildSettings) {
+    this.guildSettings = guildSettings;
     this.filePath = path.join(config.dataDirectory, "knowledge-base.json");
     this.messages = new Map();
     this.load();
@@ -25,13 +25,11 @@ class KnowledgeBase {
 
   load() {
     const saved = readJson(this.filePath, { messages: [] });
-    if (!Array.isArray(saved.messages)) {
-      return;
-    }
+    if (!Array.isArray(saved.messages)) return;
     for (const message of saved.messages) {
       if (
         message?.id &&
-        this.channelIds.includes(message.channelId) &&
+        message.guildId &&
         typeof message.content === "string" &&
         message.content.trim()
       ) {
@@ -42,17 +40,21 @@ class KnowledgeBase {
 
   save() {
     writeJson(this.filePath, {
-      version: 1,
+      version: 2,
       updatedAt: new Date().toISOString(),
       messages: [...this.messages.values()],
     });
   }
 
+  shouldIndex(message) {
+    if (!message?.guildId || message.author?.bot) return false;
+    const settings = this.guildSettings.get(message.guildId);
+    return settings.knowledgeChannelIds.includes(message.channelId);
+  }
+
   upsert(message) {
     if (
-      !message ||
-      message.author?.bot ||
-      !this.channelIds.includes(message.channelId) ||
+      !this.shouldIndex(message) ||
       typeof message.content !== "string" ||
       !message.content.trim()
     ) {
@@ -73,33 +75,40 @@ class KnowledgeBase {
   }
 
   remove(message) {
-    if (!message?.id || !this.messages.has(message.id)) {
-      return false;
-    }
+    if (!message?.id || !this.messages.has(message.id)) return false;
     this.messages.delete(message.id);
     return true;
   }
 
-  search(query, limit = 5) {
-    const terms = tokenize(query);
-    if (terms.length === 0) {
-      return [];
-    }
+  count(guildId) {
+    const settings = this.guildSettings.get(guildId);
+    return [...this.messages.values()].filter(
+      (message) =>
+        message.guildId === guildId &&
+        settings.knowledgeChannelIds.includes(message.channelId),
+    ).length;
+  }
 
+  search(query, guildId, limit = 5) {
+    const terms = tokenize(query);
+    if (terms.length === 0) return [];
+    const settings = this.guildSettings.get(guildId);
     const results = [];
     for (const message of this.messages.values()) {
-      const messageTerms = tokenize(
-        message.channelName + " " + message.content,
-      );
+      if (
+        message.guildId !== guildId ||
+        !settings.knowledgeChannelIds.includes(message.channelId)
+      ) {
+        continue;
+      }
+      const messageTerms = tokenize(message.channelName + " " + message.content);
       const score = terms.reduce(
-        (total, term) => total + messageTerms.filter((item) => item === term).length,
+        (total, term) =>
+          total + messageTerms.filter((item) => item === term).length,
         0,
       );
-      if (score > 0) {
-        results.push({ message, score });
-      }
+      if (score > 0) results.push({ message, score });
     }
-
     return results
       .sort(
         (left, right) =>
@@ -110,36 +119,30 @@ class KnowledgeBase {
       .slice(0, limit);
   }
 
-  async sync(client) {
+  async sync(client, guildId) {
+    const settings = this.guildSettings.get(guildId);
     let fetched = 0;
-    for (const channelId of this.channelIds) {
+    for (const channelId of settings.knowledgeChannelIds) {
       const channel = await client.channels.fetch(channelId);
-      if (!channel?.messages?.fetch) {
-        continue;
-      }
-
+      if (!channel?.messages?.fetch || channel.guildId !== guildId) continue;
       let before;
       while (true) {
         const options = { limit: 100 };
-        if (before) {
-          options.before = before;
-        }
+        if (before) options.before = before;
         const batch = await channel.messages.fetch(options);
-        if (batch.size === 0) {
-          break;
-        }
-        for (const message of batch.values()) {
-          this.upsert(message);
-        }
+        if (batch.size === 0) break;
+        for (const message of batch.values()) this.upsert(message);
         fetched += batch.size;
         before = batch.last().id;
-        if (batch.size < 100) {
-          break;
-        }
+        if (batch.size < 100) break;
       }
     }
     this.save();
-    return { channels: this.channelIds.length, fetched, indexed: this.messages.size };
+    return {
+      channels: settings.knowledgeChannelIds.length,
+      fetched,
+      indexed: this.count(guildId),
+    };
   }
 }
 

@@ -9,4 +9,3 @@ logs/
 *.pem
 *.pub
 *.token
-customer-instances/

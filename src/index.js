@@ -6,12 +6,15 @@ const {
   GatewayIntentBits,
   Partials,
   PermissionFlagsBits,
+  Routes,
   SlashCommandBuilder,
 } = require("discord.js");
 const { config } = require("./config");
 const { GeminiChat } = require("./ai");
+const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
 const { KnowledgeBase } = require("./knowledge");
 const { ReminderStore } = require("./reminders");
+const { ensureParentDirectory } = require("./storage");
 
 if (!config.discordToken) {
   throw new Error("DISCORD_TOKEN is missing from .env");
@@ -27,25 +30,31 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
+const guildSettings = new GuildSettingsStore(config);
 const ai = new GeminiChat(config);
-const knowledge = new KnowledgeBase(config);
-const reminders = new ReminderStore(config);
+const knowledge = new KnowledgeBase(config, guildSettings);
+const reminders = new ReminderStore({
+  ...config,
+  reminderDefaultTimeZone: config.defaultReminderTimeZone,
+});
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName("chat")
-    .setDescription("Chat with the AI")
-    .setDMPermission(true)
-    .addStringOption((option) =>
-      option
-        .setName("message")
-        .setDescription("What would you like to say?")
-        .setRequired(true)
-        .setMaxLength(2_000),
-    ),
+const chatCommand = new SlashCommandBuilder()
+  .setName("chat")
+  .setDescription("Chat with the AI")
+  .setDMPermission(true)
+  .addStringOption((option) =>
+    option
+      .setName("message")
+      .setDescription("What would you like to say?")
+      .setRequired(true)
+      .setMaxLength(2_000),
+  );
+
+const serverCommands = [
+  chatCommand,
   new SlashCommandBuilder()
     .setName("knowledge-search")
-    .setDescription("Search the local server knowledge base")
+    .setDescription("Search this server's local knowledge base")
     .setDMPermission(false)
     .addStringOption((option) =>
       option
@@ -56,12 +65,12 @@ const commands = [
     ),
   new SlashCommandBuilder()
     .setName("knowledge-status")
-    .setDescription("Show the knowledge-base status")
+    .setDescription("Show this server's knowledge-base status")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName("knowledge-sync")
-    .setDescription("Backfill the configured knowledge channels")
+    .setDescription("Backfill this server's configured knowledge channels")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
@@ -77,23 +86,112 @@ const commands = [
     )
     .addStringOption((option) =>
       option
-        .setName("time-zone")
-        .setDescription("PST, EST, UTC, or an IANA time zone")
-        .setRequired(true)
-        .setMaxLength(50),
-    )
-    .addStringOption((option) =>
-      option
         .setName("when")
         .setDescription("30 mins, in 2 hrs, or tomorrow at noon PST")
         .setRequired(true)
         .setMaxLength(100),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("time-zone")
+        .setDescription("Optional: PST, EST, UTC, or an IANA time zone")
+        .setRequired(false)
+        .setMaxLength(50),
+    ),
+  new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Configure this server's bot profile and settings")
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("profile")
+        .setDescription("Set this server's bot nickname, avatar, banner, or bio")
+        .addStringOption((option) =>
+          option
+            .setName("nickname")
+            .setDescription("Visible bot name in this server")
+            .setRequired(false)
+            .setMaxLength(32),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("bio")
+            .setDescription("Bot profile bio in this server")
+            .setRequired(false)
+            .setMaxLength(190),
+        )
+        .addAttachmentOption((option) =>
+          option
+            .setName("avatar")
+            .setDescription("Server-specific bot avatar image")
+            .setRequired(false),
+        )
+        .addAttachmentOption((option) =>
+          option
+            .setName("banner")
+            .setDescription("Server-specific bot banner image")
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("personality")
+        .setDescription("Set the AI personality for this server")
+        .addStringOption((option) =>
+          option
+            .setName("instructions")
+            .setDescription("Instructions that guide the AI in this server")
+            .setRequired(true)
+            .setMaxLength(4_000),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("knowledge-add")
+        .setDescription("Add a text channel to this server's knowledge base")
+        .addChannelOption((option) =>
+          option
+            .setName("channel")
+            .setDescription("Channel to index")
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("knowledge-remove")
+        .setDescription("Remove a text channel from this server's knowledge base")
+        .addChannelOption((option) =>
+          option
+            .setName("channel")
+            .setDescription("Channel to stop indexing")
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("limits")
+        .setDescription("Set this server's AI and reminder defaults")
+        .addIntegerOption((option) =>
+          option
+            .setName("ai-responses-per-hour")
+            .setDescription("Per-user hourly AI response limit")
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(500),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("reminder-time-zone")
+            .setDescription("PST, EST, UTC, or an IANA time zone")
+            .setRequired(false)
+            .setMaxLength(50),
+        ),
     ),
   new SlashCommandBuilder()
     .setName("restart")
-    .setDescription("Restart this bot instance")
-    .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDescription("Restart the shared bot service")
+    .setDMPermission(false),
   new SlashCommandBuilder()
     .setName("update")
     .setDescription("Manage server roles")
@@ -117,6 +215,8 @@ const commands = [
         ),
     ),
 ].map((command) => command.toJSON());
+
+const directMessageCommands = [chatCommand.toJSON()];
 
 function splitMessage(text, maximumLength = 1_900) {
   const chunks = [];
@@ -151,21 +251,46 @@ function hasPermission(interaction, permission) {
   return Boolean(interaction.memberPermissions?.has(permission));
 }
 
+function isBotOwner(userId) {
+  return config.botOwnerIds.includes(userId);
+}
+
 function aiErrorMessage(error) {
   if (error.code === "AI_NOT_CONFIGURED") {
-    return "Gemini is not configured for this bot instance. Add GEMINI_API_KEY to its private .env file.";
+    return "AI is not configured for this service. Please contact the bot owner.";
   }
   if (error.code === "AI_RATE_LIMITED") {
-    return "This bot instance has reached its configured AI response limit for the hour.";
+    return "This server has reached its configured AI response limit for the hour.";
   }
   return "I could not reach Gemini right now. Please try again later.";
+}
+
+function getSettingsForGuild(guildId) {
+  return guildId
+    ? guildSettings.get(guildId)
+    : guildSettings.getDirectMessageSettings();
+}
+
+async function requestAiResponse({ guildId, userId, text }) {
+  const settings = getSettingsForGuild(guildId);
+  return ai.respond({
+    scopeId: guildId || "direct-messages",
+    userId,
+    text,
+    personality: settings.personality,
+    responseLimit: settings.aiResponsesPerHour,
+  });
 }
 
 async function handleChatInteraction(interaction) {
   const text = interaction.options.getString("message", true).trim();
   await interaction.deferReply();
   try {
-    const response = await ai.respond(interaction.user.id, text);
+    const response = await requestAiResponse({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      text,
+    });
     const chunks = splitMessage(response);
     await interaction.editReply({
       content: chunks.shift() || "Gemini returned an empty response.",
@@ -187,6 +312,13 @@ async function handleChatInteraction(interaction) {
 }
 
 async function handleKnowledgeInteraction(interaction) {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: "Knowledge-base commands are only available in a server.",
+      ephemeral: true,
+    });
+    return;
+  }
   const subcommand = interaction.commandName.replace("knowledge-", "");
   if (
     subcommand !== "search" &&
@@ -200,12 +332,14 @@ async function handleKnowledgeInteraction(interaction) {
   }
 
   if (subcommand === "status") {
+    const settings = guildSettings.get(interaction.guildId);
     await interaction.reply({
       content: [
-        "Indexed messages: " + knowledge.messages.size.toLocaleString(),
+        "Indexed messages: " +
+          knowledge.count(interaction.guildId).toLocaleString(),
         "Configured channels: " +
-          (knowledge.channelIds.length > 0
-            ? knowledge.channelIds.join(", ")
+          (settings.knowledgeChannelIds.length > 0
+            ? settings.knowledgeChannelIds.join(", ")
             : "none"),
       ].join("\n"),
       ephemeral: true,
@@ -215,10 +349,10 @@ async function handleKnowledgeInteraction(interaction) {
 
   if (subcommand === "search") {
     const query = interaction.options.getString("query", true);
-    const results = knowledge.search(query);
+    const results = knowledge.search(query, interaction.guildId);
     if (results.length === 0) {
       await interaction.reply({
-        content: "I could not find anything matching that in the knowledge base.",
+        content: "I could not find anything matching that in this server's knowledge base.",
         ephemeral: true,
       });
       return;
@@ -247,13 +381,13 @@ async function handleKnowledgeInteraction(interaction) {
 
   await interaction.deferReply({ ephemeral: true });
   try {
-    const result = await knowledge.sync(client);
+    const result = await knowledge.sync(client, interaction.guildId);
     await interaction.editReply(
       "Knowledge sync complete. Fetched " +
         result.fetched.toLocaleString() +
         " message(s); " +
         result.indexed.toLocaleString() +
-        " message(s) are indexed.",
+        " message(s) are indexed for this server.",
     );
   } catch (error) {
     console.error("Knowledge sync failed:", error.message);
@@ -262,10 +396,13 @@ async function handleKnowledgeInteraction(interaction) {
 }
 
 async function handleReminderInteraction(interaction) {
+  const settings = getSettingsForGuild(interaction.guildId);
   const reminder = reminders.add({
     userId: interaction.user.id,
     text: interaction.options.getString("message", true).trim(),
-    timeZone: interaction.options.getString("time-zone", true).trim(),
+    timeZone:
+      interaction.options.getString("time-zone")?.trim() ||
+      settings.reminderTimeZone,
     when: interaction.options.getString("when", true).trim(),
   });
   if (!reminder) {
@@ -286,15 +423,15 @@ async function handleReminderInteraction(interaction) {
 }
 
 async function handleRestartInteraction(interaction) {
-  if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+  if (!isBotOwner(interaction.user.id)) {
     await interaction.reply({
-      content: "Only server managers can restart this bot instance.",
+      content: "Only the shared bot owner can restart the service.",
       ephemeral: true,
     });
     return;
   }
   await interaction.reply({
-    content: "Restarting this bot instance now.",
+    content: "Restarting the shared bot service now.",
     ephemeral: true,
   });
   setTimeout(() => {
@@ -341,6 +478,204 @@ async function handleUpdateRoleInteraction(interaction) {
   }
 }
 
+function attachmentExtension(attachment) {
+  const extension = path.extname(
+    new URL(attachment.url).pathname,
+  ).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension)) {
+    return extension;
+  }
+  return ".png";
+}
+
+async function saveGuildImage(guildId, kind, attachment) {
+  if (
+    attachment.contentType &&
+    !attachment.contentType.toLowerCase().startsWith("image/")
+  ) {
+    throw new Error("The " + kind + " attachment must be an image.");
+  }
+  if (attachment.size && attachment.size > 8 * 1024 * 1024) {
+    throw new Error("The " + kind + " image must be 8 MB or smaller.");
+  }
+  const response = await fetch(attachment.url);
+  if (!response.ok) {
+    throw new Error("Could not download the " + kind + " image.");
+  }
+  const content = Buffer.from(await response.arrayBuffer());
+  if (content.length === 0 || content.length > 8 * 1024 * 1024) {
+    throw new Error("The " + kind + " image must be between 1 byte and 8 MB.");
+  }
+  const destination = path.join(
+    config.dataDirectory,
+    "guild-assets",
+    guildId,
+    kind + attachmentExtension(attachment),
+  );
+  ensureParentDirectory(destination);
+  fs.writeFileSync(destination, content);
+  return destination;
+}
+
+function imageDataUri(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  const extension = path.extname(filePath).toLowerCase();
+  const mimeType =
+    extension === ".jpg" || extension === ".jpeg"
+      ? "image/jpeg"
+      : extension === ".webp"
+        ? "image/webp"
+        : extension === ".gif"
+          ? "image/gif"
+          : "image/png";
+  return "data:" + mimeType + ";base64," +
+    fs.readFileSync(filePath).toString("base64");
+}
+
+async function applyGuildProfile(guild, profile) {
+  const body = {};
+  if (profile.nickname) body.nick = profile.nickname;
+  if (profile.bio) body.bio = profile.bio;
+  const avatar = imageDataUri(profile.avatarPath);
+  const banner = imageDataUri(profile.bannerPath);
+  if (avatar) body.avatar = avatar;
+  if (banner) body.banner = banner;
+  if (Object.keys(body).length === 0) return;
+  await client.rest.patch(Routes.guildMember(guild.id, "@me"), { body });
+}
+
+async function handleSetupProfile(interaction) {
+  const nickname = interaction.options.getString("nickname");
+  const bio = interaction.options.getString("bio");
+  const avatar = interaction.options.getAttachment("avatar");
+  const banner = interaction.options.getAttachment("banner");
+  if (nickname === null && bio === null && !avatar && !banner) {
+    await interaction.reply({
+      content: "Provide at least one profile value to update.",
+      ephemeral: true,
+    });
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const changes = {};
+    if (nickname !== null) changes.nickname = nickname.trim();
+    if (bio !== null) changes.bio = bio.trim();
+    if (avatar) {
+      changes.avatarPath = await saveGuildImage(
+        interaction.guildId,
+        "avatar",
+        avatar,
+      );
+    }
+    if (banner) {
+      changes.bannerPath = await saveGuildImage(
+        interaction.guildId,
+        "banner",
+        banner,
+      );
+    }
+    const settings = guildSettings.setProfile(interaction.guildId, changes);
+    await applyGuildProfile(interaction.guild, settings.profile);
+    await interaction.editReply(
+      "This server's bot profile was updated. Discord may take a moment to show it everywhere.",
+    );
+  } catch (error) {
+    console.error("Guild profile update failed:", error.message);
+    await interaction.editReply("Profile update failed: " + error.message);
+  }
+}
+
+async function handleSetupPersonality(interaction) {
+  const personality = interaction.options.getString("instructions", true).trim();
+  guildSettings.setPersonality(interaction.guildId, personality);
+  await interaction.reply({
+    content: "This server's AI personality was updated.",
+    ephemeral: true,
+  });
+}
+
+async function handleSetupKnowledgeChannel(interaction, remove) {
+  const channel = interaction.options.getChannel("channel", true);
+  if (!channel.isTextBased() || channel.guildId !== interaction.guildId) {
+    await interaction.reply({
+      content: "Choose a text channel in this server.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const settings = remove
+    ? guildSettings.removeKnowledgeChannel(interaction.guildId, channel.id)
+    : guildSettings.addKnowledgeChannel(interaction.guildId, channel.id);
+  if (remove) knowledge.save();
+  await interaction.reply({
+    content:
+      (remove ? "Stopped indexing " : "Added ") +
+      channel +
+      ". Configured knowledge channels: " +
+      (settings.knowledgeChannelIds.length || "none") +
+      ".",
+    ephemeral: true,
+    allowedMentions: { parse: [] },
+  });
+}
+
+async function handleSetupLimits(interaction) {
+  const responseLimit = interaction.options.getInteger("ai-responses-per-hour");
+  const timeZone = interaction.options.getString("reminder-time-zone");
+  if (responseLimit === null && timeZone === null) {
+    await interaction.reply({
+      content: "Provide an AI response limit, a reminder time zone, or both.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const changes = {};
+  if (responseLimit !== null) changes.aiResponsesPerHour = responseLimit;
+  if (timeZone !== null) {
+    const normalized = normalizeTimeZone(timeZone, "");
+    if (!normalized) {
+      await interaction.reply({
+        content: "That is not a valid time zone. Try PST, EST, UTC, or America/Los_Angeles.",
+        ephemeral: true,
+      });
+      return;
+    }
+    changes.reminderTimeZone = normalized;
+  }
+  const settings = guildSettings.setLimits(interaction.guildId, changes);
+  await interaction.reply({
+    content:
+      "Server defaults updated. AI limit: " +
+      settings.aiResponsesPerHour +
+      " per user/hour. Reminder time zone: " +
+      settings.reminderTimeZone +
+      ".",
+    ephemeral: true,
+  });
+}
+
+async function handleSetupInteraction(interaction) {
+  if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: "Only server managers can configure this server's bot settings.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === "profile") return handleSetupProfile(interaction);
+  if (subcommand === "personality") return handleSetupPersonality(interaction);
+  if (subcommand === "knowledge-add") {
+    return handleSetupKnowledgeChannel(interaction, false);
+  }
+  if (subcommand === "knowledge-remove") {
+    return handleSetupKnowledgeChannel(interaction, true);
+  }
+  if (subcommand === "limits") return handleSetupLimits(interaction);
+  return null;
+}
+
 async function handleInteraction(interaction) {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === "chat") {
@@ -351,6 +686,8 @@ async function handleInteraction(interaction) {
     await handleReminderInteraction(interaction);
   } else if (interaction.commandName === "restart") {
     await handleRestartInteraction(interaction);
+  } else if (interaction.commandName === "setup") {
+    await handleSetupInteraction(interaction);
   } else if (
     interaction.commandName === "update" &&
     interaction.options.getSubcommand() === "role"
@@ -373,13 +710,17 @@ async function isReplyToBot(message) {
 async function handleTextChat(message, text) {
   if (!text) {
     await message.reply({
-      content: "*Oink.* Send me a question or message and I will do my best to help.",
+      content: "Send me a question or message and I will do my best to help.",
       allowedMentions: { parse: [], repliedUser: false },
     });
     return;
   }
   try {
-    const response = await ai.respond(message.author.id, text);
+    const response = await requestAiResponse({
+      guildId: message.guildId,
+      userId: message.author.id,
+      text,
+    });
     await sendMessageChunks(message.channel, response, message);
   } catch (error) {
     console.error("Message chat failed:", error.message);
@@ -390,51 +731,35 @@ async function handleTextChat(message, text) {
   }
 }
 
-async function applyBotProfile(user) {
-  if (config.botName && user.username !== config.botName) {
-    try {
-      await user.setUsername(config.botName);
-    } catch (error) {
-      console.warn("Could not set configured bot name:", error.message);
-    }
-  }
-  if (config.botAvatarPath && fs.existsSync(config.botAvatarPath)) {
-    try {
-      const extension = path.extname(config.botAvatarPath).toLowerCase();
-      const mimeType = extension === ".jpg" || extension === ".jpeg"
-        ? "image/jpeg"
-        : extension === ".webp"
-          ? "image/webp"
-          : "image/png";
-      const image = fs.readFileSync(config.botAvatarPath).toString("base64");
-      await user.setAvatar("data:" + mimeType + ";base64," + image);
-    } catch (error) {
-      console.warn("Could not set configured bot avatar:", error.message);
-    }
-  }
+async function registerGuildCommands(guild) {
+  await guild.commands.set(serverCommands);
+  console.log("Registered server commands for " + guild.name + ".");
 }
 
 client.once(Events.ClientReady, (readyClient) => {
   (async () => {
     console.log("Logged in as " + readyClient.user.tag);
-    await applyBotProfile(readyClient.user);
-    await readyClient.application.commands.set(
-      commands,
-      config.discordGuildId || undefined,
+    await readyClient.application.commands.set(directMessageCommands);
+    console.log("Registered " + directMessageCommands.length + " global DM command.");
+    const results = await Promise.allSettled(
+      [...client.guilds.cache.values()].map((guild) => registerGuildCommands(guild)),
     );
-    console.log(
-      "Registered " +
-        commands.length +
-        (config.discordGuildId
-          ? " server slash commands."
-          : " global slash commands."),
-    );
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length > 0) {
+      console.warn("Could not register commands in " + failures.length + " server(s).");
+    }
     reminders.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
     client.destroy();
     process.exit(1);
   });
+});
+
+client.on(Events.GuildCreate, (guild) => {
+  registerGuildCommands(guild).catch((error) =>
+    console.error("Could not register new-server commands:", error.message),
+  );
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
@@ -457,12 +782,12 @@ client.on(Events.MessageCreate, (message) => {
   const text = mentioned
     ? message.content.replace(mentionPattern, "").trim()
     : message.content.trim();
-  isReplyToBot(message).then((replied) => {
-    if (mentioned || replied) {
-      return handleTextChat(message, text);
-    }
-    return null;
-  }).catch((error) => console.error("Message handling failed:", error.message));
+  isReplyToBot(message)
+    .then((replied) => {
+      if (mentioned || replied) return handleTextChat(message, text);
+      return null;
+    })
+    .catch((error) => console.error("Message handling failed:", error.message));
 });
 
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => {

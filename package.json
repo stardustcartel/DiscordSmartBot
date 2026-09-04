@@ -2,12 +2,12 @@
   "name": "discord-smart-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "A configurable Gemini-powered Discord bot for independently hosted customer instances",
+  "description": "A shared Gemini-powered Discord bot with isolated per-server settings",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/ai.js && node --check scripts/provision-instance.js",
-    "provision": "node scripts/provision-instance.js"
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/ai.js && node --check scripts/print-invite-url.js",
+    "invite": "node scripts/print-invite-url.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {

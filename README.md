@@ -1,94 +1,90 @@
 # Discord Smart Bot
 
-An independently hosted, configurable Discord bot for one customer/server at a
-time. Each customer instance has its own Discord application, bot token,
-Gemini API key, personality file, avatar, data directory, and process.
+One shared Gemini-powered Discord bot that gives every server its own identity
+and settings. A server manager can customize the bot's nickname, avatar,
+banner, bio, AI personality, knowledge channels, reminder time zone, and AI
+usage limit without creating a Discord bot application or supplying a bot token.
 
-## MVP scope
+## What is shared and what is isolated
 
-- Gemini-powered chat through /chat, direct messages, mentions, and replies
-- Customer-supplied personality prompt
-- Customer-supplied bot name and avatar
-- /knowledge-search, /knowledge-status, and /knowledge-sync
-- /remind for private DM reminders
-- /restart for an instance restart through systemd
-- /update role for a generic role assignment
-- Operator-run provisioning for isolated customer instances
+The Discord bot application, its global username, its global presence/status,
+and the Gemini API key belong to the service operator.
 
-This repository intentionally does not include the personal bot's hard-coded
-personality, roles, server IDs, social/news features, or personal assets.
+Each server receives isolated settings and data:
 
-## Important Discord setup limitation
+- Server-specific bot nickname, avatar, banner, and bio
+- AI personality and per-user AI response limit
+- Knowledge channels and knowledge-search results
+- Reminder time-zone default
+- Stored profile images and configuration
 
-Discord requires a Discord application and bot user to be created in the
-Developer Portal. There is no normal public API for this project to silently
-create arbitrary customer bot applications. For this MVP, either:
+The global bot status cannot differ by server because Discord presence belongs to
+the bot account. A fully custom status or global username requires a dedicated
+bot application/token and is a future white-label tier.
 
-1. the customer creates the application and bot, then gives the operator the
-   application ID and bot token through a trusted private process; or
-2. the operator creates and manages the application for the customer.
+## Server-manager setup
 
-Never collect Discord bot tokens or Gemini keys in a Discord channel or DM.
-The current provisioning script is intended to be run by the operator on the
-Oracle host or another trusted machine.
+After inviting the bot, a member with Manage Server can run:
 
-## Oracle MVP setup
+    /setup profile nickname:My Server Bot avatar:upload.png banner:upload.png bio:Helpful assistant
+    /setup personality instructions:You are a warm and concise helper for our community.
+    /setup knowledge-add channel:#rules
+    /setup knowledge-add channel:#faq
+    /setup limits ai-responses-per-hour:30 reminder-time-zone:America/Los_Angeles
+    /knowledge-sync
 
-On the Oracle VM, install Node.js 20 or newer, then clone and install the
-product repository:
+The profile command applies the custom profile only inside that server. The
+bot needs the Change Nickname permission to set the server nickname.
 
-    git clone https://github.com/stardustcartel/DiscordSmartBot.git
-    cd DiscordSmartBot
+## Commands
+
+- /chat: chat with the AI
+- /setup: server-manager configuration for profile, personality, knowledge, and limits
+- /knowledge-search, /knowledge-status, /knowledge-sync
+- /remind: private DM reminder
+- /update role: generic role assignment for members with Manage Roles
+- /restart: restricted to service-owner Discord IDs in BOT_OWNER_IDS
+
+Direct messages use the service default personality because a DM is not tied to
+one server.
+
+## Oracle deployment
+
+On the Oracle VM, install Node.js 20 or newer and clone the repository:
+
+    git clone https://github.com/stardustcartel/DiscordSmartBot.git /home/ubuntu/discord-smart-bot
+    cd /home/ubuntu/discord-smart-bot
     npm ci
+    cp .env.example .env
 
-For each customer, have the customer create their Discord application/bot,
-enable the Message Content privileged intent in the Developer Portal, and
-create a Gemini API key. Then run:
+Edit .env with the shared Discord bot token, application ID, your Discord user
+ID in BOT_OWNER_IDS, and the service-owned Gemini API key. Keep .env private.
 
-    node scripts/provision-instance.js \
-      --output /home/ubuntu/discord-smart-bots \
-      --slug customer-1
+In the Discord Developer Portal, enable the Message Content privileged intent.
+Then generate the install link:
 
-The wizard asks for the bot token, application ID, optional customer server ID,
-Gemini key, display name, avatar path, personality file path, knowledge channel
-IDs, and reminder time zone. Providing the server ID makes slash commands
-available immediately after installation. Without it, commands are registered
-globally and may take longer to appear. The wizard validates the Discord token,
-copies the product source into an isolated instance directory, creates a
-private .env, and writes INSTALL_URL.txt.
+    npm run invite
 
-Send the customer the install URL from that file. The URL requests the
-permissions needed by the current MVP, including Manage Roles for the
-update role command.
+Install the bot in a server using the generated URL. It requests the permissions
+needed for the current commands, including Change Nickname and Manage Roles.
 
-Finish the instance setup on the Oracle VM:
+Install and start the service:
 
-    cd /home/ubuntu/discord-smart-bots/customer-1
-    npm ci --omit=dev
-    sudo install -m 644 discord-smart-bot@.service \
-      /etc/systemd/system/discord-smart-bot@.service
+    sudo install -m 644 deploy/discord-smart-bot.service /etc/systemd/system/discord-smart-bot.service
     sudo systemctl daemon-reload
-    sudo systemctl enable --now discord-smart-bot@customer-1
-    sudo journalctl -u discord-smart-bot@customer-1 -f
+    sudo systemctl enable --now discord-smart-bot
+    sudo journalctl -u discord-smart-bot -f
 
-The service restarts the instance when the restart command is used or when
-the process exits unexpectedly.
+If your Oracle login is not ubuntu, update the User, WorkingDirectory, and
+EnvironmentFile fields in the service file before installing it.
 
-## Configuration
+## Security and product direction
 
-The generated instance .env contains the customer-specific secrets and
-settings. The personality prompt is stored at
-config/personality.txt; replacing that file and restarting the instance
-changes the bot's behavior. The avatar is copied into the instance's assets
-directory.
+This shared-service MVP deliberately does not accept Gemini API keys through
+Discord commands. The service operator supplies the Gemini key and uses
+per-server response limits to control usage. A future dashboard can add
+encrypted bring-your-own-key storage and billing controls.
 
-Knowledge channels are configured with Discord channel IDs, separated by
-commas. The bot indexes configured channels during knowledge-sync and keeps
-new, edited, and deleted messages synchronized while it is online.
-
-## Current boundaries
-
-This is an operator-run MVP, not yet a customer-facing web dashboard. The
-next product stage should replace manual secret exchange with a secured
-provisioning portal using Discord OAuth2, encrypted secrets, authenticated
-file uploads, and an instance database.
+Server configuration is stored under data, which is excluded from Git. Each
+server's knowledge search is filtered by server ID and configured channels, so
+one server cannot search another server's content.

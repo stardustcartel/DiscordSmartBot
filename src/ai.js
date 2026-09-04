@@ -1,17 +1,7 @@
-const fs = require("node:fs");
 const { GoogleGenAI } = require("@google/genai");
 
 const maxConversationMessages = 12;
-
-function loadPersonality(filePath) {
-  try {
-    const personality = fs.readFileSync(filePath, "utf8").trim();
-    return personality || "You are a helpful Discord assistant.";
-  } catch (error) {
-    console.warn("Could not load personality file " + filePath + ":", error.message);
-    return "You are a helpful Discord assistant.";
-  }
-}
+const fallbackPersonality = "You are a helpful, friendly Discord assistant.";
 
 class GeminiChat {
   constructor(config) {
@@ -19,42 +9,43 @@ class GeminiChat {
     this.ai = config.geminiApiKey
       ? new GoogleGenAI({ apiKey: config.geminiApiKey })
       : null;
-    this.personality = loadPersonality(config.personalityFile);
     this.conversations = new Map();
     this.usage = new Map();
   }
 
-  reloadPersonality() {
-    this.personality = loadPersonality(this.config.personalityFile);
-  }
-
-  reserveResponse(userId) {
+  reserveResponse(scopeId, userId, responseLimit) {
+    const key = scopeId + ":" + userId;
     const now = Date.now();
-    const recent = (this.usage.get(userId) || []).filter(
+    const recent = (this.usage.get(key) || []).filter(
       (timestamp) => now - timestamp < 60 * 60 * 1000,
     );
-    if (recent.length >= this.config.aiResponsesPerHour) {
-      this.usage.set(userId, recent);
+    if (recent.length >= responseLimit) {
+      this.usage.set(key, recent);
       return false;
     }
     recent.push(now);
-    this.usage.set(userId, recent);
+    this.usage.set(key, recent);
     return true;
   }
 
-  async respond(userId, text) {
+  async respond({ scopeId, userId, text, personality, responseLimit }) {
     if (!this.ai) {
       const error = new Error("GEMINI_API_KEY is missing");
       error.code = "AI_NOT_CONFIGURED";
       throw error;
     }
-    if (!this.reserveResponse(userId)) {
+    const limit =
+      Number.isFinite(responseLimit) && responseLimit > 0
+        ? responseLimit
+        : this.config.defaultAiResponsesPerHour;
+    if (!this.reserveResponse(scopeId, userId, limit)) {
       const error = new Error("AI response rate limit reached");
       error.code = "AI_RATE_LIMITED";
       throw error;
     }
 
-    const previous = this.conversations.get(userId) || [];
+    const conversationKey = scopeId + ":" + userId;
+    const previous = this.conversations.get(conversationKey) || [];
     const conversation = [
       ...previous,
       { role: "user", parts: [{ text }] },
@@ -63,7 +54,8 @@ class GeminiChat {
       model: this.config.geminiModel,
       contents: conversation,
       config: {
-        systemInstruction: this.personality,
+        systemInstruction:
+          String(personality || "").trim() || fallbackPersonality,
         maxOutputTokens: 1200,
         temperature: 0.8,
       },
@@ -73,7 +65,7 @@ class GeminiChat {
       throw new Error("Gemini returned an empty response");
     }
     this.conversations.set(
-      userId,
+      conversationKey,
       [...conversation, { role: "model", parts: [{ text: responseText }] }].slice(
         -maxConversationMessages,
       ),

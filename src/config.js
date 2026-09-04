@@ -21,36 +21,28 @@ function parseIdList(value) {
   ];
 }
 
-const configuredAiResponsesPerHour = Number.parseInt(
-  process.env.AI_RESPONSES_PER_HOUR || "30",
-  10,
-);
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 const config = {
   projectRoot,
   discordToken: process.env.DISCORD_TOKEN || "",
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || "",
-  discordGuildId: /^\d{15,25}$/.test(process.env.DISCORD_GUILD_ID || "")
-    ? process.env.DISCORD_GUILD_ID
-    : "",
-  botName: String(process.env.BOT_NAME || "").trim(),
-  botAvatarPath: process.env.BOT_AVATAR_PATH
-    ? resolveProjectPath(process.env.BOT_AVATAR_PATH, "")
-    : "",
-  personalityFile: resolveProjectPath(
-    process.env.PERSONALITY_FILE,
-    "config/personality.txt",
-  ),
+  botOwnerIds: parseIdList(process.env.BOT_OWNER_IDS),
   geminiApiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-  aiResponsesPerHour:
-    Number.isFinite(configuredAiResponsesPerHour) &&
-    configuredAiResponsesPerHour > 0
-      ? configuredAiResponsesPerHour
-      : 30,
-  knowledgeChannelIds: parseIdList(process.env.KNOWLEDGE_CHANNEL_IDS),
-  reminderDefaultTimeZone:
-    process.env.REMINDER_TIME_ZONE || "America/Los_Angeles",
+  defaultAiResponsesPerHour: positiveInteger(
+    process.env.DEFAULT_AI_RESPONSES_PER_HOUR,
+    30,
+  ),
+  defaultReminderTimeZone:
+    process.env.DEFAULT_REMINDER_TIME_ZONE || "America/Los_Angeles",
+  defaultPersonalityFile: resolveProjectPath(
+    process.env.DEFAULT_PERSONALITY_FILE,
+    "config/personality.example.txt",
+  ),
   dataDirectory: resolveProjectPath(process.env.DATA_DIRECTORY, "data"),
 };
 
