@@ -4,10 +4,14 @@ const {
   Client,
   Events,
   GatewayIntentBits,
+  ActionRowBuilder,
+  ModalBuilder,
   Partials,
   PermissionFlagsBits,
   Routes,
   SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require("discord.js");
 const { config } = require("./config");
 const { GeminiChat } = require("./ai");
@@ -195,6 +199,11 @@ const serverCommands = [
         .setName("ai-key-status")
         .setDescription("Check whether this server's Gemini key is configured"),
     ),
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("api-key")
+        .setDescription("Securely save or replace this server's Gemini API key"),
+    ),
   new SlashCommandBuilder()
     .setName("restart")
     .setDescription("Restart the shared bot service")
@@ -264,7 +273,7 @@ function isBotOwner(userId) {
 
 function aiErrorMessage(error) {
   if (error.code === "AI_NOT_CONFIGURED") {
-    return "This server does not have a Gemini API key configured yet. Ask a server manager to contact the bot operator.";
+    return "This server does not have a Gemini API key configured yet. A server manager can add one with /setup api-key.";
   }
   if (error.code === "AI_RATE_LIMITED") {
     return "This server has reached its configured AI response limit for the hour.";
@@ -667,7 +676,39 @@ async function handleSetupAiKeyStatus(interaction) {
   await interaction.reply({
     content: guildSecrets.hasGeminiKey(interaction.guildId)
       ? "A Gemini API key is configured for this server."
-      : "No Gemini API key is configured for this server. Contact the bot operator to add the server's own key.",
+      : "No Gemini API key is configured for this server. A server manager can add one with /setup api-key.",
+    ephemeral: true,
+  });
+}
+
+async function showSetupGeminiKeyModal(interaction) {
+  const keyInput = new TextInputBuilder()
+    .setCustomId("gemini-api-key")
+    .setLabel("Gemini API key")
+    .setPlaceholder("Paste this server's Gemini API key")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMinLength(10)
+    .setMaxLength(200);
+  const modal = new ModalBuilder()
+    .setCustomId("setup-gemini-api-key")
+    .setTitle("Configure Gemini API key")
+    .addComponents(new ActionRowBuilder().addComponents(keyInput));
+  await interaction.showModal(modal);
+}
+
+async function handleSetupGeminiKeyModal(interaction) {
+  if (!interaction.guildId || !hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: "Only server managers can configure this server's Gemini API key.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const apiKey = interaction.fields.getTextInputValue("gemini-api-key");
+  guildSecrets.setGeminiKey(interaction.guildId, apiKey);
+  await interaction.reply({
+    content: "Gemini API key saved for this server. The key is encrypted and will not be shown again.",
     ephemeral: true,
   });
 }
@@ -693,10 +734,17 @@ async function handleSetupInteraction(interaction) {
   if (subcommand === "ai-key-status") {
     return handleSetupAiKeyStatus(interaction);
   }
+  if (subcommand === "api-key") return showSetupGeminiKeyModal(interaction);
   return null;
 }
 
 async function handleInteraction(interaction) {
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === "setup-gemini-api-key") {
+      return handleSetupGeminiKeyModal(interaction);
+    }
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === "chat") {
     await handleChatInteraction(interaction);

@@ -89,16 +89,18 @@ EnvironmentFile fields in the service file before installing it.
 
 ## Security and product direction
 
-This shared-service MVP deliberately does not accept Gemini API keys through
-Discord commands. A customer gives their own key to the operator through a
-trusted private handoff, never a Discord message. The operator sets it after
+Server managers can use `/setup api-key` to open a private Discord modal and
+save or replace their server's Gemini API key. The bot does not echo or log the
+key; it encrypts the value with AES-256-GCM in `data/guild-secrets.json`.
+
+For an operator-managed alternative, the key can be set from the server after
 the bot is installed with:
 
     npm run set:gemini-key -- --guild CUSTOMER_GUILD_ID
 
 The command uses a hidden terminal prompt and stores the key encrypted with
-AES-256-GCM in data/guild-secrets.json. A future dashboard can replace the
-operator handoff with an authenticated HTTPS onboarding form.
+AES-256-GCM in `data/guild-secrets.json`. A future dashboard can replace the
+Discord modal with an authenticated HTTPS onboarding form.
 
 Server configuration is stored under data, which is excluded from Git. Each
 server's knowledge search is filtered by server ID and configured channels, so
