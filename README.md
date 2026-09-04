@@ -105,3 +105,11 @@ Discord modal with an authenticated HTTPS onboarding form.
 Server configuration is stored under data, which is excluded from Git. Each
 server's knowledge search is filtered by server ID and configured channels, so
 one server cannot search another server's content.
+
+## Gemini model fallback
+
+`GEMINI_MODEL_LADDER` is an optional comma-separated list of Gemini model IDs.
+For each response, the bot tries the models in order and moves to the next one
+when Gemini reports quota, model-availability, or temporary service errors.
+Each customer key must have access to the configured models. A project-level
+permission denial is reported as an error and is not bypassed by the ladder.

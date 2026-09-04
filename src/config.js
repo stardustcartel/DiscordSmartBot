@@ -26,13 +26,29 @@ function positiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseModelList(value, fallback) {
+  const models = String(value || "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  return [...new Set(models.length > 0 ? models : fallback)];
+}
+
+const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+
 const config = {
   projectRoot,
   discordToken: process.env.DISCORD_TOKEN || "",
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || "",
   botOwnerIds: parseIdList(process.env.BOT_OWNER_IDS),
   guildSecretsKey: process.env.GUILD_SECRETS_KEY || "",
-  geminiModel: process.env.GEMINI_MODEL || "gemini-3.6-flash",
+  geminiModel: defaultGeminiModel,
+  geminiModels: parseModelList(process.env.GEMINI_MODEL_LADDER, [
+    defaultGeminiModel,
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+  ]),
   defaultAiResponsesPerHour: positiveInteger(
     process.env.DEFAULT_AI_RESPONSES_PER_HOUR,
     30,
@@ -46,4 +62,4 @@ const config = {
   dataDirectory: resolveProjectPath(process.env.DATA_DIRECTORY, "data"),
 };
 
-module.exports = { config, parseIdList, resolveProjectPath };
+module.exports = { config, parseIdList, parseModelList, resolveProjectPath };

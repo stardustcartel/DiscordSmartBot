@@ -3,6 +3,24 @@ const { GoogleGenAI } = require("@google/genai");
 const maxConversationMessages = 12;
 const fallbackPersonality = "You are a helpful, friendly Discord assistant.";
 
+function geminiErrorStatus(error) {
+  const directStatus = Number(error?.status || error?.code);
+  if (Number.isFinite(directStatus)) return directStatus;
+  const match = String(error?.message || error || "").match(/"code"\s*:\s*(\d{3})/);
+  return match ? Number(match[1]) : 0;
+}
+
+function canTryNextModel(error) {
+  const status = geminiErrorStatus(error);
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    [404, 429, 500, 502, 503, 504].includes(status) ||
+    /quota|resource[_ ]exhausted|rate[_ ]limit|model[_ ]not[_ ]found|unavailable|temporarily|high demand|overloaded|internal server error|deadline exceeded/.test(
+      message,
+    )
+  );
+}
+
 class GeminiChat {
   constructor(config) {
     this.config = config;
@@ -62,16 +80,31 @@ class GeminiChat {
       ...previous,
       { role: "user", parts: [{ text }] },
     ];
-    const response = await this.getClient(apiKey).models.generateContent({
-      model: this.config.geminiModel,
-      contents: conversation,
-      config: {
-        systemInstruction:
-          String(personality || "").trim() || fallbackPersonality,
-        maxOutputTokens: 1200,
-        temperature: 0.8,
-      },
-    });
+    let response;
+    let lastError;
+    const models = this.config.geminiModels || [this.config.geminiModel];
+    for (const [index, model] of models.entries()) {
+      try {
+        response = await this.getClient(apiKey).models.generateContent({
+          model,
+          contents: conversation,
+          config: {
+            systemInstruction:
+              String(personality || "").trim() || fallbackPersonality,
+            maxOutputTokens: 1200,
+            temperature: 0.8,
+          },
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        if (index === models.length - 1 || !canTryNextModel(error)) throw error;
+        console.warn(
+          "Gemini model " + model + " failed; trying the next configured model.",
+        );
+      }
+    }
+    if (!response) throw lastError || new Error("Gemini did not return a response.");
     const responseText = String(response.text || "").trim();
     if (!responseText) {
       throw new Error("Gemini returned an empty response");
