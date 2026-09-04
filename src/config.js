@@ -32,7 +32,7 @@ const config = {
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || "",
   botOwnerIds: parseIdList(process.env.BOT_OWNER_IDS),
   guildSecretsKey: process.env.GUILD_SECRETS_KEY || "",
-  geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-3.6-flash",
   defaultAiResponsesPerHour: positiveInteger(
     process.env.DEFAULT_AI_RESPONSES_PER_HOUR,
     30,
