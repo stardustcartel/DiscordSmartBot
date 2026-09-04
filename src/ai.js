@@ -6,11 +6,16 @@ const fallbackPersonality = "You are a helpful, friendly Discord assistant.";
 class GeminiChat {
   constructor(config) {
     this.config = config;
-    this.ai = config.geminiApiKey
-      ? new GoogleGenAI({ apiKey: config.geminiApiKey })
-      : null;
+    this.clients = new Map();
     this.conversations = new Map();
     this.usage = new Map();
+  }
+
+  getClient(apiKey) {
+    if (!this.clients.has(apiKey)) {
+      this.clients.set(apiKey, new GoogleGenAI({ apiKey }));
+    }
+    return this.clients.get(apiKey);
   }
 
   reserveResponse(scopeId, userId, responseLimit) {
@@ -28,9 +33,16 @@ class GeminiChat {
     return true;
   }
 
-  async respond({ scopeId, userId, text, personality, responseLimit }) {
-    if (!this.ai) {
-      const error = new Error("GEMINI_API_KEY is missing");
+  async respond({
+    apiKey,
+    scopeId,
+    userId,
+    text,
+    personality,
+    responseLimit,
+  }) {
+    if (!apiKey) {
+      const error = new Error("No Gemini API key is configured for this server");
       error.code = "AI_NOT_CONFIGURED";
       throw error;
     }
@@ -50,7 +62,7 @@ class GeminiChat {
       ...previous,
       { role: "user", parts: [{ text }] },
     ];
-    const response = await this.ai.models.generateContent({
+    const response = await this.getClient(apiKey).models.generateContent({
       model: this.config.geminiModel,
       contents: conversation,
       config: {

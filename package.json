@@ -6,8 +6,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/ai.js && node --check scripts/print-invite-url.js",
-    "invite": "node scripts/print-invite-url.js"
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/guild-secrets.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/ai.js && node --check scripts/print-invite-url.js && node --check scripts/generate-secrets-key.js && node --check scripts/set-guild-gemini-key.js",
+    "invite": "node scripts/print-invite-url.js",
+    "generate:secrets-key": "node scripts/generate-secrets-key.js",
+    "set:gemini-key": "node scripts/set-guild-gemini-key.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {

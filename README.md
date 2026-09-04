@@ -7,8 +7,9 @@ usage limit without creating a Discord bot application or supplying a bot token.
 
 ## What is shared and what is isolated
 
-The Discord bot application, its global username, its global presence/status,
-and the Gemini API key belong to the service operator.
+The Discord bot application, its global username, and its global
+presence/status belong to the service operator. Each customer/server supplies
+and pays for its own Gemini API key.
 
 Each server receives isolated settings and data:
 
@@ -17,6 +18,7 @@ Each server receives isolated settings and data:
 - Knowledge channels and knowledge-search results
 - Reminder time-zone default
 - Stored profile images and configuration
+- Encrypted customer Gemini API key
 
 The global bot status cannot differ by server because Discord presence belongs to
 the bot account. A fully custom status or global username requires a dedicated
@@ -31,6 +33,7 @@ After inviting the bot, a member with Manage Server can run:
     /setup knowledge-add channel:#rules
     /setup knowledge-add channel:#faq
     /setup limits ai-responses-per-hour:30 reminder-time-zone:America/Los_Angeles
+    /setup ai-key-status
     /knowledge-sync
 
 The profile command applies the custom profile only inside that server. The
@@ -45,8 +48,8 @@ bot needs the Change Nickname permission to set the server nickname.
 - /update role: generic role assignment for members with Manage Roles
 - /restart: restricted to service-owner Discord IDs in BOT_OWNER_IDS
 
-Direct messages use the service default personality because a DM is not tied to
-one server.
+AI requests are available in servers only, because each Gemini key is tied to
+one server. Direct messages cannot be safely attributed to a customer's key.
 
 ## Oracle deployment
 
@@ -57,8 +60,14 @@ On the Oracle VM, install Node.js 20 or newer and clone the repository:
     npm ci
     cp .env.example .env
 
-Edit .env with the shared Discord bot token, application ID, your Discord user
-ID in BOT_OWNER_IDS, and the service-owned Gemini API key. Keep .env private.
+Generate the encryption key once:
+
+    npm run generate:secrets-key
+
+Put the printed value in GUILD_SECRETS_KEY in .env, alongside the shared
+Discord bot token, application ID, and your Discord user ID in BOT_OWNER_IDS.
+Keep .env private and back up GUILD_SECRETS_KEY: it is required to decrypt
+customer Gemini keys after a server migration or recovery.
 
 In the Discord Developer Portal, enable the Message Content privileged intent.
 Then generate the install link:
@@ -81,9 +90,15 @@ EnvironmentFile fields in the service file before installing it.
 ## Security and product direction
 
 This shared-service MVP deliberately does not accept Gemini API keys through
-Discord commands. The service operator supplies the Gemini key and uses
-per-server response limits to control usage. A future dashboard can add
-encrypted bring-your-own-key storage and billing controls.
+Discord commands. A customer gives their own key to the operator through a
+trusted private handoff, never a Discord message. The operator sets it after
+the bot is installed with:
+
+    npm run set:gemini-key -- --guild CUSTOMER_GUILD_ID
+
+The command uses a hidden terminal prompt and stores the key encrypted with
+AES-256-GCM in data/guild-secrets.json. A future dashboard can replace the
+operator handoff with an authenticated HTTPS onboarding form.
 
 Server configuration is stored under data, which is excluded from Git. Each
 server's knowledge search is filtered by server ID and configured channels, so

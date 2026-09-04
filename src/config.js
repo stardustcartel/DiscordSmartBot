@@ -31,7 +31,7 @@ const config = {
   discordToken: process.env.DISCORD_TOKEN || "",
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || "",
   botOwnerIds: parseIdList(process.env.BOT_OWNER_IDS),
-  geminiApiKey: process.env.GEMINI_API_KEY || "",
+  guildSecretsKey: process.env.GUILD_SECRETS_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   defaultAiResponsesPerHour: positiveInteger(
     process.env.DEFAULT_AI_RESPONSES_PER_HOUR,

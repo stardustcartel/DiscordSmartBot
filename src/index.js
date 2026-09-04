@@ -12,6 +12,7 @@ const {
 const { config } = require("./config");
 const { GeminiChat } = require("./ai");
 const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
+const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
 const { ReminderStore } = require("./reminders");
 const { ensureParentDirectory } = require("./storage");
@@ -31,6 +32,7 @@ const client = new Client({
 });
 
 const guildSettings = new GuildSettingsStore(config);
+const guildSecrets = new GuildSecretsStore(config);
 const ai = new GeminiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
 const reminders = new ReminderStore({
@@ -187,6 +189,11 @@ const serverCommands = [
             .setRequired(false)
             .setMaxLength(50),
         ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("ai-key-status")
+        .setDescription("Check whether this server's Gemini key is configured"),
     ),
   new SlashCommandBuilder()
     .setName("restart")
@@ -257,7 +264,7 @@ function isBotOwner(userId) {
 
 function aiErrorMessage(error) {
   if (error.code === "AI_NOT_CONFIGURED") {
-    return "AI is not configured for this service. Please contact the bot owner.";
+    return "This server does not have a Gemini API key configured yet. Ask a server manager to contact the bot operator.";
   }
   if (error.code === "AI_RATE_LIMITED") {
     return "This server has reached its configured AI response limit for the hour.";
@@ -274,6 +281,7 @@ function getSettingsForGuild(guildId) {
 async function requestAiResponse({ guildId, userId, text }) {
   const settings = getSettingsForGuild(guildId);
   return ai.respond({
+    apiKey: guildId ? guildSecrets.getGeminiKey(guildId) : "",
     scopeId: guildId || "direct-messages",
     userId,
     text,
@@ -655,6 +663,15 @@ async function handleSetupLimits(interaction) {
   });
 }
 
+async function handleSetupAiKeyStatus(interaction) {
+  await interaction.reply({
+    content: guildSecrets.hasGeminiKey(interaction.guildId)
+      ? "A Gemini API key is configured for this server."
+      : "No Gemini API key is configured for this server. Contact the bot operator to add the server's own key.",
+    ephemeral: true,
+  });
+}
+
 async function handleSetupInteraction(interaction) {
   if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
     await interaction.reply({
@@ -673,6 +690,9 @@ async function handleSetupInteraction(interaction) {
     return handleSetupKnowledgeChannel(interaction, true);
   }
   if (subcommand === "limits") return handleSetupLimits(interaction);
+  if (subcommand === "ai-key-status") {
+    return handleSetupAiKeyStatus(interaction);
+  }
   return null;
 }
 
