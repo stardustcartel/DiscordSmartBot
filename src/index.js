@@ -198,7 +198,7 @@ const serverCommands = [
       subcommand
         .setName("ai-key-status")
         .setDescription("Check whether this server's Gemini key is configured"),
-    ),
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName("api-key")
