@@ -49,11 +49,13 @@ create a Gemini API key. Then run:
       --output /home/ubuntu/discord-smart-bots \
       --slug customer-1
 
-The wizard asks for the bot token, application ID, Gemini key, display name,
-avatar path, personality file path, knowledge channel IDs, and reminder time
-zone. It validates the Discord token, copies the product source into an
-isolated instance directory, creates a private .env, and writes
-INSTALL_URL.txt.
+The wizard asks for the bot token, application ID, optional customer server ID,
+Gemini key, display name, avatar path, personality file path, knowledge channel
+IDs, and reminder time zone. Providing the server ID makes slash commands
+available immediately after installation. Without it, commands are registered
+globally and may take longer to appear. The wizard validates the Discord token,
+copies the product source into an isolated instance directory, creates a
+private .env, and writes INSTALL_URL.txt.
 
 Send the customer the install URL from that file. The URL requests the
 permissions needed by the current MVP, including Manage Roles for the

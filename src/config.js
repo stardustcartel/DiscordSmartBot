@@ -30,6 +30,9 @@ const config = {
   projectRoot,
   discordToken: process.env.DISCORD_TOKEN || "",
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || "",
+  discordGuildId: /^\d{15,25}$/.test(process.env.DISCORD_GUILD_ID || "")
+    ? process.env.DISCORD_GUILD_ID
+    : "",
   botName: String(process.env.BOT_NAME || "").trim(),
   botAvatarPath: process.env.BOT_AVATAR_PATH
     ? resolveProjectPath(process.env.BOT_AVATAR_PATH, "")

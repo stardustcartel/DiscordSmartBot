@@ -99,6 +99,9 @@ async function main() {
 
   const token = await ask("Customer bot token:");
   const applicationId = await ask("Discord application ID:");
+  const guildId = await ask(
+    "Customer server ID (optional, makes slash commands appear immediately)",
+  );
   const geminiKey = await ask("Customer Gemini API key:");
   const botName = await ask("Bot name", "Discord Smart Bot");
   const avatarSource = await ask("Avatar image path (optional)");
@@ -116,6 +119,9 @@ async function main() {
   }
   if (!/^\d{15,25}$/.test(applicationId)) {
     throw new Error("The Discord application ID must be a Discord snowflake.");
+  }
+  if (guildId && !/^\d{15,25}$/.test(guildId)) {
+    throw new Error("The customer server ID must be a Discord snowflake.");
   }
 
   const botUser = await validateBotToken(token);
@@ -152,6 +158,7 @@ async function main() {
   const envLines = [
     "DISCORD_TOKEN=" + envValue(token),
     "DISCORD_APPLICATION_ID=" + envValue(applicationId),
+    "DISCORD_GUILD_ID=" + envValue(guildId),
     "BOT_NAME=" + envValue(botName),
     "BOT_AVATAR_PATH=" + envValue(avatarPath),
     "PERSONALITY_FILE=" + envValue("config/personality.txt"),

@@ -418,8 +418,17 @@ client.once(Events.ClientReady, (readyClient) => {
   (async () => {
     console.log("Logged in as " + readyClient.user.tag);
     await applyBotProfile(readyClient.user);
-    await readyClient.application.commands.set(commands);
-    console.log("Registered " + commands.length + " global slash commands.");
+    await readyClient.application.commands.set(
+      commands,
+      config.discordGuildId || undefined,
+    );
+    console.log(
+      "Registered " +
+        commands.length +
+        (config.discordGuildId
+          ? " server slash commands."
+          : " global slash commands."),
+    );
     reminders.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
