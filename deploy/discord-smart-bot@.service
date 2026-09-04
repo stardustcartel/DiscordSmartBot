@@ -1,0 +1,18 @@
+[Unit]
+Description=Discord Smart Bot instance %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/discord-smart-bots/%i
+EnvironmentFile=/home/ubuntu/discord-smart-bots/%i/.env
+ExecStart=/usr/bin/node /home/ubuntu/discord-smart-bots/%i/src/index.js
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
