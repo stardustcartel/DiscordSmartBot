@@ -111,7 +111,7 @@ one server cannot search another server's content.
 Server managers can create an announcement subscription without a YouTube API
 key:
 
-    /youtube add source:https://www.youtube.com/@YouTubeCreators destination:#announcements
+    /youtube channelnewvidnotification source:https://www.youtube.com/@YouTubeCreators destination:#announcements
 
 The bot records the latest existing upload when the subscription is added, then
 checks YouTube's public channel feed every five minutes and announces future

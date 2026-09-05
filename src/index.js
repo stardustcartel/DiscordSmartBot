@@ -117,7 +117,7 @@ const serverCommands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("add")
+        .setName("channelnewvidnotification")
         .setDescription("Announce a YouTube channel's new uploads")
         .addStringOption((option) =>
           option
@@ -814,8 +814,7 @@ async function handleYouTubeInteraction(interaction) {
       lastVideoId: feed.entries[0].id,
     });
     await interaction.editReply(
-      "Announcements are enabled for **" + (feed.name || "this YouTube channel") +
-      "** in " + destination + ". Existing videos will not be reposted; the next upload will be announced.",
+      "Got it! Every time *" + (feed.name || "this channel") + "* posts, I'll shout it out here!",
     );
   } catch (error) {
     console.error("YouTube subscription setup failed:", error.message);
