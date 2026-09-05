@@ -111,13 +111,13 @@ one server cannot search another server's content.
 Server managers can create an announcement subscription without a YouTube API
 key:
 
-    /youtube channelnewvidnotification source:https://www.youtube.com/@YouTubeCreators destination:#announcements
+    /youtube channel-new-video-notification source:https://www.youtube.com/@YouTubeCreators destination:#announcements
 
 The bot records the latest existing upload when the subscription is added, then
 checks YouTube's public channel feed every five minutes and announces future
-uploads. Use `/youtube list` to see the channel IDs and `/youtube remove` to
-stop a subscription. The bot needs permission to View Channel and Send Messages
-in the selected destination.
+uploads. Use `/youtube list-new-video-notification` to see the channel IDs and
+`/youtube remove-new-video-notification` to stop a subscription. The bot needs
+permission to View Channel and Send Messages in the selected destination.
 
 ## Gemini model fallback
 

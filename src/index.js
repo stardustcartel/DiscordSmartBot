@@ -117,7 +117,7 @@ const serverCommands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("channelnewvidnotification")
+        .setName("channel-new-video-notification")
         .setDescription("Announce a YouTube channel's new uploads")
         .addStringOption((option) =>
           option
@@ -136,17 +136,17 @@ const serverCommands = [
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("list")
+        .setName("list-new-video-notification")
         .setDescription("List this server's YouTube announcements"),
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("remove")
+        .setName("remove-new-video-notification")
         .setDescription("Stop announcements from a YouTube channel")
         .addStringOption((option) =>
           option
             .setName("channel-id")
-            .setDescription("The channel ID shown by /youtube list")
+            .setDescription("The channel ID shown by the list command")
             .setRequired(true)
             .setMaxLength(100),
         ),
@@ -769,7 +769,7 @@ async function handleYouTubeInteraction(interaction) {
     return;
   }
   const subcommand = interaction.options.getSubcommand();
-  if (subcommand === "list") {
+  if (subcommand === "list-new-video-notification") {
     const subscriptions = guildSettings.get(interaction.guildId).youtubeSubscriptions;
     await interaction.reply({
       content: subscriptions.length === 0
@@ -784,7 +784,7 @@ async function handleYouTubeInteraction(interaction) {
     });
     return;
   }
-  if (subcommand === "remove") {
+  if (subcommand === "remove-new-video-notification") {
     const channelId = interaction.options.getString("channel-id", true).trim();
     const current = guildSettings.get(interaction.guildId).youtubeSubscriptions;
     if (!current.some((subscription) => subscription.youtubeChannelId === channelId)) {
