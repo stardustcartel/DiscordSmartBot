@@ -26,6 +26,11 @@ function positiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function positiveInterval(value, fallback, minimum) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= minimum ? parsed : fallback;
+}
+
 function parseModelList(value, fallback) {
   const models = String(value || "")
     .split(",")
@@ -55,6 +60,11 @@ const config = {
   ),
   defaultReminderTimeZone:
     process.env.DEFAULT_REMINDER_TIME_ZONE || "America/Los_Angeles",
+  youtubePollIntervalMs: positiveInterval(
+    process.env.YOUTUBE_POLL_INTERVAL_MS,
+    300_000,
+    60_000,
+  ),
   defaultPersonalityFile: resolveProjectPath(
     process.env.DEFAULT_PERSONALITY_FILE,
     "config/personality.example.txt",
@@ -62,4 +72,10 @@ const config = {
   dataDirectory: resolveProjectPath(process.env.DATA_DIRECTORY, "data"),
 };
 
-module.exports = { config, parseIdList, parseModelList, resolveProjectPath };
+module.exports = {
+  config,
+  parseIdList,
+  parseModelList,
+  positiveInterval,
+  resolveProjectPath,
+};

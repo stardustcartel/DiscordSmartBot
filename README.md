@@ -106,6 +106,19 @@ Server configuration is stored under data, which is excluded from Git. Each
 server's knowledge search is filtered by server ID and configured channels, so
 one server cannot search another server's content.
 
+## YouTube announcements
+
+Server managers can create an announcement subscription without a YouTube API
+key:
+
+    /youtube add source:https://www.youtube.com/@YouTubeCreators destination:#announcements
+
+The bot records the latest existing upload when the subscription is added, then
+checks YouTube's public channel feed every five minutes and announces future
+uploads. Use `/youtube list` to see the channel IDs and `/youtube remove` to
+stop a subscription. The bot needs permission to View Channel and Send Messages
+in the selected destination.
+
 ## Gemini model fallback
 
 `GEMINI_MODEL_LADDER` is an optional comma-separated list of Gemini model IDs.

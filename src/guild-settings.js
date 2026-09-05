@@ -42,6 +42,27 @@ function cleanChannelIds(value) {
   ];
 }
 
+function cleanYouTubeSubscriptions(value) {
+  const seen = new Set();
+  return (Array.isArray(value) ? value : [])
+    .map((subscription) => ({
+      youtubeChannelId: String(subscription?.youtubeChannelId || "").trim(),
+      sourceUrl: cleanText(subscription?.sourceUrl, 500),
+      sourceName: cleanText(subscription?.sourceName, 200),
+      destinationChannelId: String(subscription?.destinationChannelId || "").trim(),
+      lastVideoId: cleanText(subscription?.lastVideoId, 100),
+    }))
+    .filter((subscription) => {
+      const valid =
+        /^UC[\w-]{20,}$/.test(subscription.youtubeChannelId) &&
+        /^\d{15,25}$/.test(subscription.destinationChannelId);
+      const key = subscription.youtubeChannelId + ":" + subscription.destinationChannelId;
+      if (!valid || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 class GuildSettingsStore {
   constructor(config) {
     this.config = config;
@@ -68,6 +89,7 @@ class GuildSettingsStore {
       },
       personality: this.defaultPersonality,
       knowledgeChannelIds: [],
+      youtubeSubscriptions: [],
       reminderTimeZone: this.config.defaultReminderTimeZone,
       aiResponsesPerHour: this.config.defaultAiResponsesPerHour,
     };
@@ -91,6 +113,7 @@ class GuildSettingsStore {
       personality:
         cleanText(value?.personality, 12_000) || defaults.personality,
       knowledgeChannelIds: cleanChannelIds(value?.knowledgeChannelIds),
+      youtubeSubscriptions: cleanYouTubeSubscriptions(value?.youtubeSubscriptions),
       reminderTimeZone: timeZone || defaults.reminderTimeZone,
       aiResponsesPerHour:
         Number.isFinite(responseLimit) && responseLimit > 0
@@ -152,6 +175,38 @@ class GuildSettingsStore {
 
   setLimits(guildId, changes) {
     return this.update(guildId, (current) => ({ ...current, ...changes }));
+  }
+
+  addYouTubeSubscription(guildId, subscription) {
+    return this.update(guildId, (current) => ({
+      ...current,
+      youtubeSubscriptions: [
+        ...current.youtubeSubscriptions.filter(
+          (item) =>
+            item.youtubeChannelId !== subscription.youtubeChannelId ||
+            item.destinationChannelId !== subscription.destinationChannelId,
+        ),
+        subscription,
+      ],
+    }));
+  }
+
+  removeYouTubeSubscription(guildId, youtubeChannelId) {
+    return this.update(guildId, (current) => ({
+      ...current,
+      youtubeSubscriptions: current.youtubeSubscriptions.filter(
+        (item) => item.youtubeChannelId !== youtubeChannelId,
+      ),
+    }));
+  }
+
+  listYouTubeSubscriptions() {
+    return Object.entries(this.data.guilds).flatMap(([guildId]) =>
+      this.get(guildId).youtubeSubscriptions.map((subscription) => ({
+        guildId,
+        ...subscription,
+      })),
+    );
   }
 }
 

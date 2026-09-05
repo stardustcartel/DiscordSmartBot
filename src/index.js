@@ -5,6 +5,7 @@ const {
   Events,
   GatewayIntentBits,
   ActionRowBuilder,
+  ChannelType,
   ModalBuilder,
   Partials,
   PermissionFlagsBits,
@@ -19,6 +20,7 @@ const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
 const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
 const { ReminderStore } = require("./reminders");
+const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
 const { ensureParentDirectory } = require("./storage");
 
 if (!config.discordToken) {
@@ -42,6 +44,10 @@ const knowledge = new KnowledgeBase(config, guildSettings);
 const reminders = new ReminderStore({
   ...config,
   reminderDefaultTimeZone: config.defaultReminderTimeZone,
+});
+const youtube = new YouTubeNotifier({
+  guildSettings,
+  pollIntervalMs: config.youtubePollIntervalMs,
 });
 
 const chatCommand = new SlashCommandBuilder()
@@ -103,6 +109,47 @@ const serverCommands = [
         .setDescription("Optional: PST, EST, UTC, or an IANA time zone")
         .setRequired(false)
         .setMaxLength(50),
+    ),
+  new SlashCommandBuilder()
+    .setName("youtube")
+    .setDescription("Announce new uploads from YouTube channels")
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("add")
+        .setDescription("Announce a YouTube channel's new uploads")
+        .addStringOption((option) =>
+          option
+            .setName("source")
+            .setDescription("Full YouTube channel URL")
+            .setRequired(true)
+            .setMaxLength(500),
+        )
+        .addChannelOption((option) =>
+          option
+            .setName("destination")
+            .setDescription("Where announcements should be posted")
+            .setRequired(true)
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("list")
+        .setDescription("List this server's YouTube announcements"),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("remove")
+        .setDescription("Stop announcements from a YouTube channel")
+        .addStringOption((option) =>
+          option
+            .setName("channel-id")
+            .setDescription("The channel ID shown by /youtube list")
+            .setRequired(true)
+            .setMaxLength(100),
+        ),
     ),
   new SlashCommandBuilder()
     .setName("setup")
@@ -713,6 +760,69 @@ async function handleSetupGeminiKeyModal(interaction) {
   });
 }
 
+async function handleYouTubeInteraction(interaction) {
+  if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: "Only server managers can configure YouTube announcements.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === "list") {
+    const subscriptions = guildSettings.get(interaction.guildId).youtubeSubscriptions;
+    await interaction.reply({
+      content: subscriptions.length === 0
+        ? "This server has no YouTube announcements configured."
+        : subscriptions.map((subscription) =>
+          "`" + subscription.youtubeChannelId + "` — " +
+          (subscription.sourceName || subscription.sourceUrl || "YouTube channel") +
+          " → <#" + subscription.destinationChannelId + ">",
+        ).join("\n"),
+      ephemeral: true,
+      allowedMentions: { parse: [] },
+    });
+    return;
+  }
+  if (subcommand === "remove") {
+    const channelId = interaction.options.getString("channel-id", true).trim();
+    const current = guildSettings.get(interaction.guildId).youtubeSubscriptions;
+    if (!current.some((subscription) => subscription.youtubeChannelId === channelId)) {
+      await interaction.reply({ content: "No announcement uses that YouTube channel ID.", ephemeral: true });
+      return;
+    }
+    guildSettings.removeYouTubeSubscription(interaction.guildId, channelId);
+    await interaction.reply({ content: "YouTube announcements removed for `" + channelId + "`.", ephemeral: true });
+    return;
+  }
+
+  const source = interaction.options.getString("source", true).trim();
+  const destination = interaction.options.getChannel("destination", true);
+  if (!destination.isTextBased() || destination.guildId !== interaction.guildId) {
+    await interaction.reply({ content: "Choose a text channel in this server.", ephemeral: true });
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const resolved = await resolveYouTubeChannel(source);
+    const feed = await fetchYouTubeFeed(resolved.channelId);
+    guildSettings.addYouTubeSubscription(interaction.guildId, {
+      youtubeChannelId: resolved.channelId,
+      sourceUrl: resolved.sourceUrl,
+      sourceName: feed.name,
+      destinationChannelId: destination.id,
+      lastVideoId: feed.entries[0].id,
+    });
+    await interaction.editReply(
+      "Announcements are enabled for **" + (feed.name || "this YouTube channel") +
+      "** in " + destination + ". Existing videos will not be reposted; the next upload will be announced.",
+    );
+  } catch (error) {
+    console.error("YouTube subscription setup failed:", error.message);
+    await interaction.editReply("Could not add that YouTube channel: " + error.message);
+  }
+}
+
 async function handleSetupInteraction(interaction) {
   if (!hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
     await interaction.reply({
@@ -752,6 +862,8 @@ async function handleInteraction(interaction) {
     await handleKnowledgeInteraction(interaction);
   } else if (interaction.commandName === "remind") {
     await handleReminderInteraction(interaction);
+  } else if (interaction.commandName === "youtube") {
+    await handleYouTubeInteraction(interaction);
   } else if (interaction.commandName === "restart") {
     await handleRestartInteraction(interaction);
   } else if (interaction.commandName === "setup") {
@@ -817,6 +929,7 @@ client.once(Events.ClientReady, (readyClient) => {
       console.warn("Could not register commands in " + failures.length + " server(s).");
     }
     reminders.start(client);
+    youtube.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
     client.destroy();
@@ -868,6 +981,7 @@ client.on(Events.MessageDelete, (message) => {
 
 function shutdown() {
   reminders.stop();
+  youtube.stop();
   client.destroy();
 }
 
