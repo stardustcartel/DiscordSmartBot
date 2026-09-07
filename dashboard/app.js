@@ -37,6 +37,8 @@ async function load() {
     const me = await api("/api/me"); dashboardReady = true; inviteUrl = me.inviteUrl || "/auth/invite";
     if (!me.user) return;
     $("#login").hidden = true; $("#account").hidden = false; $("#account").textContent = `Signed in as ${me.user.username}`;
+    $("#server-blessing").hidden = false;
+    $("#server-screen").classList.toggle("no-connected", !me.guilds.length);
     if (!me.guilds.length) { $("#signed-out").hidden = true; $("#empty-servers").hidden = false; return; }
     renderServers(me.guilds);
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
@@ -50,7 +52,8 @@ async function loadSettings() {
   $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
-  $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span><strong>${esc(item.sourceName || "YouTube channel")}</strong><br><small>→ &lt;#${item.destinationChannelId}&gt;</small></span><button data-id="${item.youtubeChannelId}">Remove</button></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
+  const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
+  $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button data-id="${item.youtubeChannelId}">Remove</button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions [data-id]").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.id }) }); toast("Notification removed."); loadSettings(); }; });
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
