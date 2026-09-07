@@ -77,6 +77,7 @@ class GuildSettingsStore {
     if (!this.data.guilds || typeof this.data.guilds !== "object") {
       this.data.guilds = {};
     }
+    this.onChange = null;
   }
 
   createDefault() {
@@ -138,7 +139,23 @@ class GuildSettingsStore {
       updatedAt: new Date().toISOString(),
       guilds: this.data.guilds,
     });
+    this.onChange?.(guildId);
     return next;
+  }
+
+  setChangeHandler(handler) {
+    this.onChange = typeof handler === "function" ? handler : null;
+  }
+
+  replaceFromSync(guildId, settings) {
+    const next = this.normalize(settings);
+    this.data.guilds[guildId] = next;
+    writeJson(this.filePath, { version: 1, updatedAt: new Date().toISOString(), guilds: this.data.guilds });
+    return next;
+  }
+
+  guildIds() {
+    return Object.keys(this.data.guilds);
   }
 
   setProfile(guildId, changes) {

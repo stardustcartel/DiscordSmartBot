@@ -22,6 +22,7 @@ const { KnowledgeBase } = require("./knowledge");
 const { ReminderStore } = require("./reminders");
 const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
 const { createDashboard } = require("./dashboard");
+const { DashboardSync } = require("./dashboard-sync");
 const { ensureParentDirectory } = require("./storage");
 
 if (!config.discordToken) {
@@ -51,6 +52,7 @@ const youtube = new YouTubeNotifier({
   pollIntervalMs: config.youtubePollIntervalMs,
 });
 const dashboard = createDashboard({ client, config, guildSettings, guildSecrets });
+const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets });
 
 const chatCommand = new SlashCommandBuilder()
   .setName("chat")
@@ -932,6 +934,7 @@ client.once(Events.ClientReady, (readyClient) => {
     reminders.start(client);
     youtube.start(client);
     dashboard.start();
+    dashboardSync.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
     client.destroy();

@@ -138,7 +138,24 @@ In the Discord Developer Portal, add this exact OAuth2 Redirect URL:
 
 The OAuth Functions establish a signed session and return the signed-in user's
 manageable servers. Durable settings storage and the bot synchronization API
-are the next dashboard layer.
+use these Cloudflare bindings and shared secrets:
+
+    D1 binding: DB
+    R2 binding: BOT_ASSETS
+    Cloudflare secret: GUILD_SECRETS_KEY (same value as Oracle)
+    Cloudflare secret: BOT_SYNC_SECRET (same value as Oracle)
+
+Create the D1 database, bind it as `DB`, and run
+`migrations/0001_dashboard.sql`. Create an R2 bucket and bind it as
+`BOT_ASSETS`. On Oracle, configure:
+
+    DASHBOARD_SYNC_URL=https://discordsmartbot.pages.dev
+    BOT_SYNC_SECRET=the_same_long_random_secret
+    DASHBOARD_SYNC_INTERVAL_MS=30000
+
+The bot bootstraps existing local settings into D1, keeps local JSON as an
+offline cache, sends Discord command changes to D1, and pulls dashboard changes
+back to the bot.
 
 ## Gemini model fallback
 

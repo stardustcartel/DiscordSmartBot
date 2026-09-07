@@ -69,6 +69,9 @@ const config = {
   dashboardPublicUrl: String(process.env.DASHBOARD_PUBLIC_URL || "").replace(/\/$/, ""),
   discordClientSecret: process.env.DISCORD_CLIENT_SECRET || "",
   dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET || "",
+  dashboardSyncUrl: String(process.env.DASHBOARD_SYNC_URL || "").replace(/\/$/, ""),
+  botSyncSecret: process.env.BOT_SYNC_SECRET || "",
+  dashboardSyncIntervalMs: positiveInterval(process.env.DASHBOARD_SYNC_INTERVAL_MS, 30_000, 10_000),
   defaultPersonalityFile: resolveProjectPath(
     process.env.DEFAULT_PERSONALITY_FILE,
     "config/personality.example.txt",

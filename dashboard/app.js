@@ -51,6 +51,7 @@ async function loadSettings() {
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span><strong>${esc(item.sourceName || "YouTube channel")}</strong><br><small>→ &lt;#${item.destinationChannelId}&gt;</small></span><button data-id="${item.youtubeChannelId}">Remove</button></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
+  document.querySelectorAll("#subscriptions [data-id]").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.id }) }); toast("Notification removed."); loadSettings(); }; });
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
