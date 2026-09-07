@@ -64,7 +64,7 @@ function publicSettings(settings) {
 function createDashboard({ client, config, guildSettings, guildSecrets }) {
   const sessions = new Map();
   const states = new Map();
-  const publicDirectory = path.join(config.projectRoot, "public", "dashboard");
+  const publicDirectory = path.join(config.projectRoot, "dashboard");
   const enabled = Boolean(config.dashboardPublicUrl && config.discordClientSecret && config.dashboardSessionSecret);
 
   function userGuilds(session) {
