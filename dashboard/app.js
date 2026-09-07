@@ -31,7 +31,7 @@ async function load() {
   try {
     const me = await api("/api/me"); dashboardReady = true; inviteUrl = me.inviteUrl || "/auth/invite";
     if (!me.user) return;
-    $("#login").hidden = true; $("#login-card").hidden = true; $("#account").hidden = false; $("#account").textContent = `Signed in as ${me.user.username}`;
+    $("#login").hidden = true; $("#account").hidden = false; $("#account").textContent = `Signed in as ${me.user.username}`;
     if (!me.guilds.length) { $("#signed-out").hidden = true; $("#empty-servers").hidden = false; return; }
     renderServers(me.guilds);
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
@@ -47,7 +47,6 @@ async function loadSettings() {
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span><strong>${esc(item.sourceName || "YouTube channel")}</strong><br><small>→ &lt;#${item.destinationChannelId}&gt;</small></span><button data-id="${item.youtubeChannelId}">Remove</button></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
-$("#login-card").onclick = () => $("#login").click();
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
@@ -56,4 +55,5 @@ $("#personality-form").onsubmit = async (event) => { event.preventDefault(); awa
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); toast("Gemini key encrypted and saved."); loadSettings(); };
 $("#profile-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/profile`, { method: "PUT", body: JSON.stringify({ nickname: event.target.nickname.value, bio: event.target.bio.value, avatarData: await dataUrl(event.target.avatar.files[0]), bannerData: await dataUrl(event.target.banner.files[0]) }) }); toast("Bot profile updated."); loadSettings(); };
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
+document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 load();
