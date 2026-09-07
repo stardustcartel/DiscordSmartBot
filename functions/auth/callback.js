@@ -15,8 +15,15 @@ export async function onRequestGet({ env, request }) {
   const [userResponse, guildResponse] = await Promise.all([fetch("https://discord.com/api/users/@me", { headers }), fetch("https://discord.com/api/users/@me/guilds", { headers })]);
   if (!userResponse.ok || !guildResponse.ok) return json({ error: "Discord account information could not be loaded." }, 502);
   const user = await userResponse.json();
-  const guilds = managedGuilds(await guildResponse.json());
-  const session = await seal({ user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar }, guilds, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }, env.DASHBOARD_SESSION_SECRET);
+  const managed = managedGuilds(await guildResponse.json());
+  let installedIds = new Set();
+  if (env.DISCORD_BOT_TOKEN) {
+    const installedResponse = await fetch("https://discord.com/api/users/@me/guilds", { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+    if (installedResponse.ok) installedIds = new Set((await installedResponse.json()).map((guild) => guild.id));
+  }
+  const guilds = managed.filter((guild) => installedIds.has(guild.id));
+  const inviteUrl = `${publicUrl(env, request)}/auth/invite`;
+  const session = await seal({ user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar }, guilds, inviteUrl, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }, env.DASHBOARD_SESSION_SECRET);
   const responseHeaders = new Headers({ Location: `${publicUrl(env, request)}/dashboard` });
   responseHeaders.append("Set-Cookie", cookie("dashboard_session", session, 43200));
   responseHeaders.append("Set-Cookie", cookie("dashboard_oauth_state", "", 0));

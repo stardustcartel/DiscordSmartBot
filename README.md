@@ -128,6 +128,7 @@ variables before enabling sign-in:
 
     DASHBOARD_PUBLIC_URL=https://discordsmartbot.pages.dev
     DISCORD_APPLICATION_ID=your_discord_application_id
+    DISCORD_BOT_TOKEN=your_shared_bot_token
     DISCORD_CLIENT_SECRET=your_discord_application_client_secret
     DASHBOARD_SESSION_SECRET=a_long_random_secret
 
