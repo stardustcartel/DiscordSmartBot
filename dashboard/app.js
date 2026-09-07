@@ -14,6 +14,7 @@ const dataUrl = (file) => new Promise((resolve, reject) => { if (!file) return r
 
 function showWorkspace(tab = "overview") {
   $("#server-screen").hidden = true; $("#workspace").hidden = false;
+  $("#personality-tab").hidden = true;
   document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
 }
