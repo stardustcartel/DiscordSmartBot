@@ -65,6 +65,10 @@ const config = {
     300_000,
     60_000,
   ),
+  dashboardPort: positiveInteger(process.env.DASHBOARD_PORT, 3000),
+  dashboardPublicUrl: String(process.env.DASHBOARD_PUBLIC_URL || "").replace(/\/$/, ""),
+  discordClientSecret: process.env.DISCORD_CLIENT_SECRET || "",
+  dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET || "",
   defaultPersonalityFile: resolveProjectPath(
     process.env.DEFAULT_PERSONALITY_FILE,
     "config/personality.example.txt",

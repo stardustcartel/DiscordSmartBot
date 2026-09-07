@@ -119,6 +119,24 @@ uploads. Use `/youtube list-new-video-notification` to see the channel IDs and
 `/youtube remove-new-video-notification` to stop a subscription. The bot needs
 permission to View Channel and Send Messages in the selected destination.
 
+## Customer dashboard
+
+The dashboard is served by the bot process and uses Discord OAuth. A person can
+only manage a server when they have Manage Server permission and the bot is
+installed there. Configure these private `.env` values before enabling it:
+
+    DASHBOARD_PUBLIC_URL=https://dashboard.example.com
+    DISCORD_CLIENT_SECRET=your_discord_application_client_secret
+    DASHBOARD_SESSION_SECRET=a_long_random_secret
+
+In the Discord Developer Portal, add this exact OAuth2 Redirect URL:
+
+    https://dashboard.example.com/auth/callback
+
+The dashboard listens only on `127.0.0.1:3000`; put an HTTPS reverse proxy such
+as Caddy in front of it. It lets server managers update their server's bot
+profile, personality, encrypted Gemini key, and YouTube subscriptions.
+
 ## Gemini model fallback
 
 `GEMINI_MODEL_LADDER` is an optional comma-separated list of Gemini model IDs.
