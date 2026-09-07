@@ -121,21 +121,23 @@ permission to View Channel and Send Messages in the selected destination.
 
 ## Customer dashboard
 
-The dashboard is served by the bot process and uses Discord OAuth. A person can
-only manage a server when they have Manage Server permission and the bot is
-installed there. Configure these private `.env` values before enabling it:
+The dashboard is served from the top-level `dashboard` directory and its
+Cloudflare Pages Functions use Discord OAuth. A person can only manage a server
+when they have Manage Server permission. Configure these private Cloudflare
+variables before enabling sign-in:
 
-    DASHBOARD_PUBLIC_URL=https://dashboard.example.com
+    DASHBOARD_PUBLIC_URL=https://discordsmartbot.pages.dev
+    DISCORD_APPLICATION_ID=your_discord_application_id
     DISCORD_CLIENT_SECRET=your_discord_application_client_secret
     DASHBOARD_SESSION_SECRET=a_long_random_secret
 
 In the Discord Developer Portal, add this exact OAuth2 Redirect URL:
 
-    https://dashboard.example.com/auth/callback
+    https://discordsmartbot.pages.dev/auth/callback
 
-The dashboard listens only on `127.0.0.1:3000`; put an HTTPS reverse proxy such
-as Caddy in front of it. It lets server managers update their server's bot
-profile, personality, encrypted Gemini key, and YouTube subscriptions.
+The OAuth Functions establish a signed session and return the signed-in user's
+manageable servers. Durable settings storage and the bot synchronization API
+are the next dashboard layer.
 
 ## Gemini model fallback
 
