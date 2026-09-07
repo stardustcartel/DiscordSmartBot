@@ -42,7 +42,12 @@ async function load() {
     guild.innerHTML = me.guilds.map((item) => `<option value="${item.id}">${esc(item.name)}</option>`).join("");
     if (!me.guilds.length) return toast("Add the bot to a server you manage first.");
     guild.onchange = loadSettings;
-    await loadSettings();
+    try {
+      await loadSettings();
+    } catch (error) {
+      if (error.code !== "DASHBOARD_API_UNAVAILABLE") throw error;
+      toast("Discord sign-in worked. Server settings storage is the next connection step.");
+    }
   } catch (error) {
     if (error.code !== "DASHBOARD_API_UNAVAILABLE") throw error;
     $("#setup-notice").hidden = false;
