@@ -83,6 +83,16 @@ async function resolveYouTubeChannel(sourceUrl) {
   return { channelId: match[1], sourceUrl: response.url || sourceUrl };
 }
 
+function announcementContent(subscription, feed, entry) {
+  const channelName = feed.name || subscription.sourceName || "YouTube channel";
+  const template = String(subscription.announcementTemplate || "📺 **{channel} uploaded a new video:**\n**{title}**")
+    .replaceAll("{channel}", channelName)
+    .replaceAll("{title}", entry.title || "New video")
+    .trim();
+  const prefixLimit = Math.max(0, 2000 - entry.url.length - 1);
+  return template.slice(0, prefixLimit) + "\n" + entry.url;
+}
+
 class YouTubeNotifier {
   constructor({ guildSettings, pollIntervalMs }) {
     this.guildSettings = guildSettings;
@@ -123,7 +133,7 @@ class YouTubeNotifier {
         if (!channel?.isTextBased()) continue;
         for (const entry of newEntries) {
           await channel.send({
-            content: "📺 **" + (feed.name || subscription.sourceName || "YouTube channel") + " uploaded a new video:**\n**" + entry.title + "**\n" + entry.url,
+            content: announcementContent(subscription, feed, entry),
             allowedMentions: { parse: [] },
           });
         }

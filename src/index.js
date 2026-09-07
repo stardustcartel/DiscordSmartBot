@@ -136,6 +136,13 @@ const serverCommands = [
             .setDescription("Where announcements should be posted")
             .setRequired(true)
             .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+        )
+        .addStringOption((option) =>
+          option
+            .setName("message")
+            .setDescription("Text before the video link; use {channel} and {title}")
+            .setRequired(false)
+            .setMaxLength(1500),
         ),
     )
     .addSubcommand((subcommand) =>
@@ -802,6 +809,8 @@ async function handleYouTubeInteraction(interaction) {
 
   const source = interaction.options.getString("source", true).trim();
   const destination = interaction.options.getChannel("destination", true);
+  const announcementTemplate = interaction.options.getString("message")?.trim() ||
+    "📺 **{channel} uploaded a new video:**\n**{title}**";
   if (!destination.isTextBased() || destination.guildId !== interaction.guildId) {
     await interaction.reply({ content: "Choose a text channel in this server.", ephemeral: true });
     return;
@@ -816,6 +825,7 @@ async function handleYouTubeInteraction(interaction) {
       sourceName: feed.name,
       destinationChannelId: destination.id,
       lastVideoId: feed.entries[0].id,
+      announcementTemplate,
     });
     await interaction.editReply(
       "Got it! Every time *" + (feed.name || "this channel") + "* posts, I'll shout it out here!",

@@ -32,6 +32,13 @@ function cleanText(value, maximumLength) {
   return String(value || "").trim().slice(0, maximumLength);
 }
 
+const defaultYouTubeAnnouncementTemplate =
+  "📺 **{channel} uploaded a new video:**\n**{title}**";
+
+function cleanYouTubeAnnouncementTemplate(value) {
+  return cleanText(value, 1500) || defaultYouTubeAnnouncementTemplate;
+}
+
 function cleanChannelIds(value) {
   return [
     ...new Set(
@@ -51,6 +58,7 @@ function cleanYouTubeSubscriptions(value) {
       sourceName: cleanText(subscription?.sourceName, 200),
       destinationChannelId: String(subscription?.destinationChannelId || "").trim(),
       lastVideoId: cleanText(subscription?.lastVideoId, 100),
+      announcementTemplate: cleanYouTubeAnnouncementTemplate(subscription?.announcementTemplate),
     }))
     .filter((subscription) => {
       const valid =

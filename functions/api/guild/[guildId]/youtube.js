@@ -7,10 +7,11 @@ export async function onRequestPost({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const destinationChannelId = String(body.destinationChannelId || "");
+  const announcementTemplate = String(body.announcementTemplate || "").trim().slice(0, 1500) || "📺 **{channel} uploaded a new video:**\n**{title}**";
   if (!/^\d{15,25}$/.test(destinationChannelId)) return json({ error: "Select an announcement channel." }, 400);
   let resolved;
   try { resolved = await resolveYouTubeChannel(body.source); } catch (error) { return json({ error: error.message }, 400); }
-  const subscription = { ...resolved, destinationChannelId };
+  const subscription = { ...resolved, destinationChannelId, announcementTemplate };
   await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: [...(state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== subscription.youtubeChannelId || item.destinationChannelId !== destinationChannelId), subscription] } }));
   return json({ ok: true, name: resolved.sourceName });
 }
