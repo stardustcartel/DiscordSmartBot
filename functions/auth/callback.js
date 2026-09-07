@@ -17,5 +17,8 @@ export async function onRequestGet({ env, request }) {
   const user = await userResponse.json();
   const guilds = managedGuilds(await guildResponse.json());
   const session = await seal({ user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar }, guilds, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }, env.DASHBOARD_SESSION_SECRET);
-  return new Response(null, { status: 302, headers: { Location: `${publicUrl(env, request)}/dashboard`, "Set-Cookie": [cookie("dashboard_session", session, 43200), cookie("dashboard_oauth_state", "", 0)].join(", ") }});
+  const responseHeaders = new Headers({ Location: `${publicUrl(env, request)}/dashboard` });
+  responseHeaders.append("Set-Cookie", cookie("dashboard_session", session, 43200));
+  responseHeaders.append("Set-Cookie", cookie("dashboard_oauth_state", "", 0));
+  return new Response(null, { status: 302, headers: responseHeaders });
 }
