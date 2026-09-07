@@ -17,7 +17,8 @@ function showWorkspace(tab = "overview") {
   document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
 }
-function showTab(tab) { document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active")); $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active"); }
+function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector("span").textContent = locked ? "Locked until Gemini is connected" : "Ready to customize"; }
+function showTab(tab) { const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $(`#${tab}`)?.classList.add("active"); }
 function renderServers(guilds) {
   $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("");
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
@@ -43,16 +44,17 @@ async function loadSettings() {
   $("#preview-name").textContent = settings.profile?.nickname || "TheSmartBot"; $("#preview-bio").textContent = settings.profile?.bio || "Your server's helpful assistant";
   if (settings.profile?.avatarUrl) $("#avatar-preview").innerHTML = `<img src="${esc(settings.profile.avatarUrl)}" alt="Current bot avatar">`;
   $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
+  setPersonalityLock(!data.hasGeminiKey);
   $("#destination").innerHTML = (data.channels || []).map((channel) => `<option value="${channel.id}"># ${esc(channel.name)}</option>`).join("");
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span><strong>${esc(item.sourceName || "YouTube channel")}</strong><br><small>→ &lt;#${item.destinationChannelId}&gt;</small></span><button data-id="${item.youtubeChannelId}">Remove</button></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
-document.querySelectorAll(".tab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
+document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
-$("#gemini-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); toast("Gemini key encrypted and saved."); loadSettings(); };
+$("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); toast(result.message || "Gemini key verified and saved."); loadSettings(); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 $("#profile-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/profile`, { method: "PUT", body: JSON.stringify({ nickname: event.target.nickname.value, bio: event.target.bio.value, avatarData: await dataUrl(event.target.avatar.files[0]), bannerData: await dataUrl(event.target.banner.files[0]) }) }); toast("Bot profile updated."); loadSettings(); };
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
