@@ -183,8 +183,9 @@ class GuildSettingsStore {
       youtubeSubscriptions: [
         ...current.youtubeSubscriptions.filter(
           (item) =>
-            item.youtubeChannelId !== subscription.youtubeChannelId ||
-            item.destinationChannelId !== subscription.destinationChannelId,
+            item.destinationChannelId !== subscription.destinationChannelId ||
+            (item.youtubeChannelId !== subscription.youtubeChannelId &&
+              item.sourceUrl !== subscription.sourceUrl),
         ),
         subscription,
       ],

@@ -58,10 +58,27 @@ async function resolveYouTubeChannel(sourceUrl) {
   if (!/(^|\.)youtube\.com$/i.test(url.hostname)) {
     throw new Error("Enter a YouTube channel URL.");
   }
+  try {
+    const oembedUrl = new URL("https://www.youtube.com/oembed");
+    oembedUrl.searchParams.set("url", url.toString());
+    oembedUrl.searchParams.set("format", "json");
+    const oembed = await fetch(oembedUrl, { headers: { "User-Agent": "DiscordSmartBot/0.1" } });
+    if (oembed.ok) {
+      const channelId = channelIdFromUrl((await oembed.json()).author_url);
+      if (channelId) return { channelId, sourceUrl: url.toString() };
+    }
+  } catch {
+    // Fall back to the channel page's own metadata.
+  }
   const response = await fetch(url, { headers: { "User-Agent": "DiscordSmartBot/0.1" } });
   if (!response.ok) throw new Error("YouTube channel page returned HTTP " + response.status + ".");
   const html = await response.text();
-  const match = html.match(/"channelId":"(UC[\w-]{20,})"/) || html.match(/"externalId":"(UC[\w-]{20,})"/);
+  const metadataMatch =
+    html.match(/<meta[^>]+itemprop=["'](?:channelId|identifier)["'][^>]+content=["'](UC[\w-]{20,})/i) ||
+    html.match(/<meta[^>]+content=["'](UC[\w-]{20,})["'][^>]+itemprop=["'](?:channelId|identifier)["']/i) ||
+    html.match(/rel=["']canonical["'][^>]+href=["']https?:\/\/www\.youtube\.com\/channel\/(UC[\w-]{20,})/i) ||
+    html.match(/"externalId":"(UC[\w-]{20,})"/);
+  const match = metadataMatch;
   if (!match) throw new Error("Could not identify that YouTube channel. Try its /channel/UC... URL.");
   return { channelId: match[1], sourceUrl: response.url || sourceUrl };
 }
