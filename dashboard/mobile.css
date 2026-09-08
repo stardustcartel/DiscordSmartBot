@@ -1,0 +1,75 @@
+@media (max-width: 720px) {
+  .workspace-grid,
+  .sidebar,
+  .content,
+  .panel,
+  .panel form {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .sidebar nav .tab,
+  .sidebar nav .side-subtab {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    margin: 0;
+    padding: 11px 9px 16px;
+    border-left: 0;
+    border-radius: 8px;
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .sidebar nav .gemini-tab {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .sidebar nav .nav-chevron {
+    position: absolute;
+    right: 8px;
+  }
+
+  .sidebar nav .side-subtab .subtab-copy {
+    flex: 0 1 auto;
+  }
+
+  .sidebar nav .tab.active::before,
+  .sidebar nav .side-subtab.active::before {
+    top: auto;
+    right: auto;
+    bottom: 5px;
+    left: 50%;
+    width: 34px;
+    height: 3px;
+    border-radius: 4px;
+    transform: translateX(-50%);
+    animation: mobile-nav-glow-in .18s ease-out;
+  }
+}
+
+@media (max-width: 360px) {
+  .sidebar nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes mobile-nav-glow-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(.35);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
+  }
+}
