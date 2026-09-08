@@ -125,6 +125,12 @@
     padding: 12px;
   }
 
+  .profile-preview-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .discord-profile-card {
     width: min(100%, 340px);
   }

@@ -6,7 +6,7 @@ let dashboardReady = false;
 
 const esc = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
 const toast = (message) => { const element = $("#toast"); element.textContent = message; element.classList.add("show"); setTimeout(() => element.classList.remove("show"), 4200); };
-const api = (url, options = {}) => fetch(url, { headers: { "Content-Type": "application/json" }, ...options }).then(async (response) => {
+const api = (url, options = {}) => fetch(url, { cache: "no-store", headers: { "Content-Type": "application/json" }, ...options }).then(async (response) => {
   if (!(response.headers.get("content-type") || "").includes("application/json")) { const error = Error("Dashboard service unavailable"); error.code = "DASHBOARD_API_UNAVAILABLE"; throw error; }
   const data = await response.json(); if (!response.ok) throw Error(data.error || "Something went wrong"); return data;
 });
@@ -50,6 +50,7 @@ function renderProfilePreview(profile = {}, version = "") {
   const displayName = profile.nickname || "TheSmartBot";
   const bio = profile.bio || "Your server's helpful assistant";
   const assetVersion = encodeURIComponent(String(version || Date.now()));
+  const versionedAssetUrl = (url) => `${url}${url.includes("?") ? "&" : "?"}v=${assetVersion}`;
   const avatar = $("#avatar-preview");
   const banner = $("#banner-preview");
   $("#preview-name").textContent = displayName;
@@ -58,13 +59,13 @@ function renderProfilePreview(profile = {}, version = "") {
   avatar.textContent = "";
   if (profile.avatarUrl) {
     const image = document.createElement("img");
-    image.src = `${profile.avatarUrl}?v=${assetVersion}`;
+    image.src = versionedAssetUrl(profile.avatarUrl);
     image.alt = `${displayName}'s current avatar`;
     image.onerror = () => { avatar.innerHTML = '<span aria-hidden="true">✦</span>'; };
     avatar.append(image);
   } else avatar.innerHTML = '<span aria-hidden="true">✦</span>';
   banner.style.backgroundImage = profile.bannerUrl
-    ? `linear-gradient(#0000000d, #0000000d), url("${profile.bannerUrl}?v=${assetVersion}")`
+    ? `linear-gradient(#0000000d, #0000000d), url("${versionedAssetUrl(profile.bannerUrl)}")`
     : "";
 }
 
