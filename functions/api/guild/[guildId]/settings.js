@@ -12,14 +12,22 @@ export async function onRequestGet({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   if (!env.DISCORD_BOT_TOKEN) return json({ error: "The bot connection is not configured yet." }, 503);
   const discordHeaders = { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
-  const [channelResponse, memberResponse] = await Promise.all([
+  const [channelResponse, botUserResponse] = await Promise.all([
     fetch(`https://discord.com/api/guilds/${params.guildId}/channels`, { headers: discordHeaders }),
-    fetch(`https://discord.com/api/guilds/${params.guildId}/members/${env.DISCORD_APPLICATION_ID}`, { headers: discordHeaders }),
+    fetch("https://discord.com/api/users/@me", { headers: discordHeaders }),
   ]);
   if (!channelResponse.ok) return json({ error: "The bot could not load this server's channels." }, 502);
   const channels = (await channelResponse.json()).filter((channel) => channel.type === 0).map((channel) => ({ id: channel.id, name: channel.name }));
+  let botUser = {};
+  if (botUserResponse.ok) {
+    try { botUser = await botUserResponse.json(); } catch { botUser = {}; }
+  }
+  const botId = botUser.id || env.DISCORD_APPLICATION_ID;
   let discordMember = null;
-  if (memberResponse.ok) {
+  const memberResponse = botId
+    ? await fetch(`https://discord.com/api/guilds/${params.guildId}/members/${botId}`, { headers: discordHeaders })
+    : null;
+  if (memberResponse?.ok) {
     try { discordMember = await memberResponse.json(); } catch { discordMember = null; }
   }
   const state = await createStateIfMissing(env.DB, params.guildId);
@@ -27,8 +35,8 @@ export async function onRequestGet({ env, request, params }) {
   settings.profile = settings.profile || {};
   delete settings.profile.avatarPath;
   delete settings.profile.bannerPath;
-  const memberUser = discordMember?.user || {};
-  const memberId = memberUser.id || env.DISCORD_APPLICATION_ID;
+  const memberUser = discordMember?.user || botUser;
+  const memberId = memberUser.id || botId;
   const storedAvatarUrl = settings.profile.avatarKey ? `/api/guild/${params.guildId}/asset/avatar` : "";
   const storedBannerUrl = settings.profile.bannerKey ? `/api/guild/${params.guildId}/asset/banner` : "";
   const discordAvatarUrl = discordMember?.avatar
