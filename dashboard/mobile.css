@@ -54,7 +54,9 @@
     flex: 0 1 auto;
   }
 
-  #youtube-form > button {
+  #youtube-form > button,
+  #gemini-form > button,
+  #profile-form > button {
     color: #fff;
   }
 
