@@ -46,6 +46,27 @@ function setupMobileNavigationHint() {
 
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
+function renderProfilePreview(profile = {}, version = "") {
+  const displayName = profile.nickname || "TheSmartBot";
+  const bio = profile.bio || "Your server's helpful assistant";
+  const assetVersion = encodeURIComponent(String(version || Date.now()));
+  const avatar = $("#avatar-preview");
+  const banner = $("#banner-preview");
+  $("#preview-name").textContent = displayName;
+  $("#preview-message-name").textContent = displayName;
+  $("#preview-bio").textContent = bio;
+  avatar.textContent = "";
+  if (profile.avatarUrl) {
+    const image = document.createElement("img");
+    image.src = `${profile.avatarUrl}?v=${assetVersion}`;
+    image.alt = `${displayName}'s current avatar`;
+    image.onerror = () => { avatar.innerHTML = '<span aria-hidden="true">✦</span>'; };
+    avatar.append(image);
+  } else avatar.innerHTML = '<span aria-hidden="true">✦</span>';
+  banner.style.backgroundImage = profile.bannerUrl
+    ? `linear-gradient(#0000000d, #0000000d), url("${profile.bannerUrl}?v=${assetVersion}")`
+    : "";
+}
 
 function showWorkspace(tab = "overview") {
   $("#server-screen").hidden = true; $("#workspace").hidden = false;
@@ -80,8 +101,7 @@ async function loadSettings() {
   const data = await api(`/api/guild/${selected}/settings`); settings = data.settings;
   $("#personality-form [name=personality]").value = settings.personality || "";
   $("#profile-form [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-form [name=bio]").value = settings.profile?.bio || "";
-  $("#preview-name").textContent = settings.profile?.nickname || "TheSmartBot"; $("#preview-bio").textContent = settings.profile?.bio || "Your server's helpful assistant";
-  if (settings.profile?.avatarUrl) $("#avatar-preview").innerHTML = `<img src="${esc(settings.profile.avatarUrl)}" alt="Current bot avatar">`;
+  renderProfilePreview(settings.profile, data.version);
   $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
@@ -96,7 +116,7 @@ document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick =
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); toast(result.message || "Gemini key verified and saved."); loadSettings(); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
-$("#profile-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/profile`, { method: "PUT", body: JSON.stringify({ nickname: event.target.nickname.value, bio: event.target.bio.value, avatarData: await dataUrl(event.target.avatar.files[0]), bannerData: await dataUrl(event.target.banner.files[0]) }) }); toast("Bot profile updated."); loadSettings(); };
+$("#profile-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/profile`, { method: "PUT", body: JSON.stringify({ nickname: event.target.nickname.value, bio: event.target.bio.value, avatarData: await dataUrl(event.target.avatar.files[0]), bannerData: await dataUrl(event.target.banner.files[0]) }) }); await loadSettings(); toast("Bot profile and preview updated."); };
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); });

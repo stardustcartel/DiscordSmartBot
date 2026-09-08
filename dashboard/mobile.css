@@ -119,3 +119,13 @@
     transform: translateX(-50%) scaleX(1);
   }
 }
+
+@media (max-width: 720px) {
+  .profile-preview-stage {
+    padding: 12px;
+  }
+
+  .discord-profile-card {
+    width: min(100%, 340px);
+  }
+}
