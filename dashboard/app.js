@@ -27,7 +27,9 @@ function setupMobileNavigationHint() {
   shell.append(nav, more);
   updateMobileNavHint = () => {
     const mobile = window.matchMedia("(max-width: 720px)").matches;
-    const hasMore = nav.scrollWidth > nav.clientWidth + 3 && nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 3;
+    const visibleOptions = [...nav.children].filter((option) => !option.hidden);
+    const lastOption = visibleOptions.at(-1);
+    const hasMore = Boolean(lastOption && lastOption.getBoundingClientRect().right > nav.getBoundingClientRect().right + 3);
     more.hidden = !mobile || !hasMore;
   };
   more.onclick = () => nav.scrollBy({ left: Math.max(150, nav.clientWidth * 0.65), behavior: "smooth" });
