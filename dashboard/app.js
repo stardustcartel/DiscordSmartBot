@@ -31,7 +31,12 @@ function setupMobileNavigationHint() {
     more.hidden = !mobile || !hasMore;
   };
   more.onclick = () => nav.scrollBy({ left: Math.max(150, nav.clientWidth * 0.65), behavior: "smooth" });
-  nav.addEventListener("scroll", updateMobileNavHint, { passive: true });
+  let scrollSettledTimer;
+  nav.addEventListener("scroll", () => {
+    more.hidden = true;
+    clearTimeout(scrollSettledTimer);
+    scrollSettledTimer = setTimeout(updateMobileNavHint, 180);
+  }, { passive: true });
   window.addEventListener("resize", updateMobileNavHint);
   new MutationObserver(() => requestAnimationFrame(updateMobileNavHint)).observe(nav, { subtree: true, attributes: true, attributeFilter: ["hidden", "class"] });
   requestAnimationFrame(updateMobileNavHint);
