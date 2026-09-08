@@ -12,6 +12,31 @@ const api = (url, options = {}) => fetch(url, { headers: { "Content-Type": "appl
 });
 const dataUrl = (file) => new Promise((resolve, reject) => { if (!file) return resolve(""); const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
 
+let updateMobileNavHint = () => {};
+function setupMobileNavigationHint() {
+  const nav = $(".sidebar nav");
+  if (!nav || nav.closest(".mobile-nav-shell")) return;
+  const shell = document.createElement("div");
+  shell.className = "mobile-nav-shell";
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "mobile-nav-more";
+  more.setAttribute("aria-label", "Show more navigation options");
+  more.textContent = "›";
+  nav.before(shell);
+  shell.append(nav, more);
+  updateMobileNavHint = () => {
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
+    const hasMore = nav.scrollWidth > nav.clientWidth + 3 && nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 3;
+    more.hidden = !mobile || !hasMore;
+  };
+  more.onclick = () => nav.scrollBy({ left: Math.max(150, nav.clientWidth * 0.65), behavior: "smooth" });
+  nav.addEventListener("scroll", updateMobileNavHint, { passive: true });
+  window.addEventListener("resize", updateMobileNavHint);
+  new MutationObserver(() => requestAnimationFrame(updateMobileNavHint)).observe(nav, { subtree: true, attributes: true, attributeFilter: ["hidden", "class"] });
+  requestAnimationFrame(updateMobileNavHint);
+}
+
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
 
@@ -20,11 +45,12 @@ function showWorkspace(tab = "overview") {
   $("#personality-tab").hidden = true;
   document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
+  requestAnimationFrame(updateMobileNavHint);
 }
 function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add Gemini key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
-function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); }
+function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); requestAnimationFrame(updateMobileNavHint); }
 function renderServers(guilds) {
-  $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("") + `<a class="server-card add-server-card" href="${esc(inviteUrl)}"><span class="add-server-mark">+</span><span><strong>Add TheSmartBot to another server</strong><small>Choose another server you manage.</small></span><span class="chevron">→</span></a>`;
+  $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("") + `<a class="server-card add-server-card" href="${esc(inviteUrl)}"><span class="add-server-mark">+</span><span><strong><span class="add-server-desktop">Add TheSmartBot to another server</span><span class="add-server-mobile">Add bot to another server</span></strong><small>Choose another server you manage.</small></span><span class="chevron">→</span></a>`;
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
 }
 async function selectGuild(guildId, guild) {
@@ -69,4 +95,5 @@ $("#destination-trigger").onclick = () => { const list = $("#destination-list");
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeDestinationMenu(); });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
+setupMobileNavigationHint();
 load();

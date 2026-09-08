@@ -1,3 +1,7 @@
+.add-server-mobile {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .workspace-grid,
   .sidebar,
@@ -13,7 +17,7 @@
     gap: 6px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0 2px 6px;
+    padding: 0 40px 6px 2px;
     scroll-behavior: smooth;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
@@ -22,6 +26,37 @@
 
   .sidebar nav::-webkit-scrollbar {
     display: none;
+  }
+
+  .mobile-nav-shell {
+    position: relative;
+  }
+
+  .mobile-nav-more {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    right: 2px;
+    width: 32px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #8f7cf566;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #5f4ee2, #8b5cf6);
+    box-shadow: -14px 0 24px #10101b, 0 0 18px #765df066;
+    color: #fff;
+    font: 800 24px/1 Manrope, sans-serif;
+    transform: translateY(-56%);
+    cursor: pointer;
+  }
+
+  .add-server-desktop {
+    display: none;
+  }
+
+  .add-server-mobile {
+    display: inline;
   }
 
   .sidebar nav .tab,
