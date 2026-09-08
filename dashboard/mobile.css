@@ -9,24 +9,35 @@
   }
 
   .sidebar nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
     gap: 6px;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 2px 6px;
+    scroll-behavior: smooth;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .sidebar nav::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar nav .tab,
   .sidebar nav .side-subtab {
-    width: 100%;
-    min-width: 0;
+    width: auto;
+    min-width: max-content;
     min-height: 46px;
+    flex: 0 0 auto;
     margin: 0;
-    padding: 11px 9px 16px;
+    padding: 11px 15px 16px;
     border-left: 0;
     border-radius: 8px;
-    white-space: normal;
+    white-space: nowrap;
     text-align: center;
     justify-content: center;
+    scroll-snap-align: start;
   }
 
   .sidebar nav .gemini-tab {
@@ -43,6 +54,10 @@
     flex: 0 1 auto;
   }
 
+  #youtube-form > button {
+    color: #fff;
+  }
+
   .sidebar nav .tab.active::before,
   .sidebar nav .side-subtab.active::before {
     top: auto;
@@ -54,12 +69,6 @@
     border-radius: 4px;
     transform: translateX(-50%);
     animation: mobile-nav-glow-in .18s ease-out;
-  }
-}
-
-@media (max-width: 360px) {
-  .sidebar nav {
-    grid-template-columns: 1fr;
   }
 }
 
