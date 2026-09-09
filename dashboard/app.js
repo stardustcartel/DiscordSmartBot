@@ -46,7 +46,9 @@ function setupMobileNavigationHint() {
 
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
+let profilePreviewRevision = 0;
 function renderProfilePreview(profile = {}, version = "") {
+  const revision = ++profilePreviewRevision;
   const displayName = profile.nickname || "TheSmartBot";
   const bio = profile.bio || "Your server's helpful assistant";
   const assetVersion = encodeURIComponent(String(version || Date.now()));
@@ -57,16 +59,32 @@ function renderProfilePreview(profile = {}, version = "") {
   $("#preview-message-name").textContent = displayName;
   $("#preview-bio").textContent = bio;
   avatar.textContent = "";
-  if (profile.avatarUrl) {
+  const avatarUrls = [...new Set([profile.avatarUrl, ...(profile.avatarUrls || [])].filter(Boolean))];
+  if (avatarUrls.length) {
     const image = document.createElement("img");
-    image.src = versionedAssetUrl(profile.avatarUrl);
     image.alt = `${displayName}'s current avatar`;
-    image.onerror = () => { avatar.innerHTML = '<span aria-hidden="true">✦</span>'; };
+    let index = 0;
+    image.onerror = () => {
+      if (revision !== profilePreviewRevision) return;
+      if (++index < avatarUrls.length) image.src = versionedAssetUrl(avatarUrls[index]);
+      else avatar.innerHTML = '<span aria-hidden="true">✦</span>';
+    };
+    image.src = versionedAssetUrl(avatarUrls[index]);
     avatar.append(image);
   } else avatar.innerHTML = '<span aria-hidden="true">✦</span>';
-  banner.style.backgroundImage = profile.bannerUrl
-    ? `linear-gradient(#0000000d, #0000000d), url("${versionedAssetUrl(profile.bannerUrl)}")`
-    : "";
+  banner.style.backgroundImage = "";
+  const bannerUrls = [...new Set([profile.bannerUrl, ...(profile.bannerUrls || [])].filter(Boolean))];
+  if (bannerUrls.length) {
+    const image = document.createElement("img");
+    let index = 0;
+    image.onload = () => {
+      if (revision === profilePreviewRevision) banner.style.backgroundImage = `url("${image.src}")`;
+    };
+    image.onerror = () => {
+      if (revision === profilePreviewRevision && ++index < bannerUrls.length) image.src = versionedAssetUrl(bannerUrls[index]);
+    };
+    image.src = versionedAssetUrl(bannerUrls[index]);
+  }
 }
 
 function showWorkspace(tab = "overview") {
@@ -83,6 +101,11 @@ function renderServers(guilds) {
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
 }
 async function selectGuild(guildId, guild) {
+  document.querySelectorAll("[data-profile-field]").forEach((form) => {
+    form.reset();
+    const label = form.querySelector(".file-label");
+    if (label) label.textContent = `Choose ${form.dataset.profileField}`;
+  });
   selected = guildId; $("#server-name").textContent = guild?.name || "Server"; $("#server-title").textContent = guild?.name || "Server settings"; $("#overview-server").textContent = guild?.name || "this server"; $("#server-icon").textContent = guild?.icon ? "" : "✦";
   if (guild?.icon) $("#server-icon").innerHTML = `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">`;
   showWorkspace(); try { await loadSettings(); } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") toast("This server is connected. Settings storage is the next connection step."); else toast(error.message); }
@@ -99,9 +122,12 @@ async function load() {
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
 }
 async function loadSettings() {
-  const data = await api(`/api/guild/${selected}/settings`); settings = data.settings;
+  const guildId = selected;
+  const data = await api(`/api/guild/${guildId}/settings`);
+  if (guildId !== selected) return;
+  settings = data.settings;
   $("#personality-form [name=personality]").value = settings.personality || "";
-  $("#profile-form [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-form [name=bio]").value = settings.profile?.bio || "";
+  $("#profile-editor [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-editor [name=bio]").value = settings.profile?.bio || "";
   renderProfilePreview(settings.profile, data.version);
   $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
   setPersonalityLock(!data.hasGeminiKey);
@@ -117,7 +143,45 @@ document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick =
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); toast(result.message || "Gemini key verified and saved."); loadSettings(); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
-$("#profile-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/profile`, { method: "PUT", body: JSON.stringify({ nickname: event.target.nickname.value, bio: event.target.bio.value, avatarData: await dataUrl(event.target.avatar.files[0]), bannerData: await dataUrl(event.target.banner.files[0]) }) }); await loadSettings(); toast("Bot profile and preview updated."); };
+document.querySelectorAll("[data-profile-field]").forEach((form) => {
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const field = form.dataset.profileField;
+    const input = form.elements.namedItem(field);
+    const guildId = selected;
+    const isImage = field === "avatar" || field === "banner";
+    const file = isImage ? input.files[0] : null;
+    const submittedValue = input.value;
+    if (isImage && !file) return toast(`Choose a ${field} image first.`);
+    if (file && file.size > 8 * 1024 * 1024) return toast("Images must be 8 MB or smaller.");
+    const buttons = [...document.querySelectorAll("[data-profile-field] > button")];
+    if (buttons.some((button) => button.disabled)) return;
+    buttons.forEach((button) => { button.disabled = true; });
+    form.setAttribute("aria-busy", "true");
+    let saved = false;
+    try {
+      const body = isImage ? { [`${field}Data`]: await dataUrl(file) } : { [field]: submittedValue };
+      await api(`/api/guild/${guildId}/profile`, { method: "PUT", body: JSON.stringify(body) });
+      saved = true;
+      if (selected !== guildId) return;
+      if (isImage && input.files[0] === file) {
+        input.value = "";
+        form.querySelector(".file-label").textContent = `Choose replacement ${field}`;
+      }
+      const data = await api(`/api/guild/${guildId}/settings`);
+      if (selected !== guildId) return;
+      settings = data.settings;
+      if (!isImage && input.value === submittedValue) input.value = settings.profile?.[field] || "";
+      renderProfilePreview(settings.profile, data.version);
+      toast(`${field.charAt(0).toUpperCase() + field.slice(1)} saved. Preview updated.`);
+    } catch (error) {
+      toast(saved ? `${field} saved, but the preview could not refresh. Reload to see it.` : error.message || `Could not save ${field}.`);
+    } finally {
+      buttons.forEach((button) => { button.disabled = false; });
+      form.removeAttribute("aria-busy");
+    }
+  };
+});
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); });

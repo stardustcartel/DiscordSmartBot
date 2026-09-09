@@ -13,7 +13,12 @@ function decodeImage(dataUrl) {
 export async function onRequestPut({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
-  const profileChanges = { nickname: String(body.nickname || "").trim().slice(0, 32), bio: String(body.bio || "").trim().slice(0, 190) };
+  const profileChanges = {};
+  for (const [field, limit] of [["nickname", 32], ["bio", 190]]) {
+    if (!Object.hasOwn(body, field)) continue;
+    if (typeof body[field] !== "string") return json({ error: `${field} must be text.` }, 400);
+    profileChanges[field] = body[field].trim().slice(0, limit);
+  }
   if ((body.avatarData || body.bannerData) && !env.BOT_ASSETS) return json({ error: "R2 binding BOT_ASSETS is not configured." }, 503);
   for (const kind of ["avatar", "banner"]) {
     if (!body[`${kind}Data`]) continue;
@@ -22,6 +27,7 @@ export async function onRequestPut({ env, request, params }) {
     await env.BOT_ASSETS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
     profileChanges[`${kind}Key`] = key;
   }
+  if (!Object.keys(profileChanges).length) return json({ error: "Choose a profile field to update." }, 400);
   await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, profile: { ...state.settings.profile, ...profileChanges } } }));
   return json({ ok: true });
 }

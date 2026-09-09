@@ -91,7 +91,7 @@
 
   #youtube-form > button,
   #gemini-form > button,
-  #profile-form > button {
+  .profile-field-form > button {
     color: #fff;
   }
 

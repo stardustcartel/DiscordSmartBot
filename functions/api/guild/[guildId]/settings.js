@@ -4,8 +4,8 @@ import { createStateIfMissing } from "../../../_lib/db.js";
 
 function cdnAsset(path, hash, size) {
   if (!hash) return "";
-  const extension = String(hash).startsWith("a_") ? "gif" : "webp";
-  return `https://cdn.discordapp.com/${path}/${hash}.${extension}?size=${size}`;
+  const animation = String(hash).startsWith("a_") ? "&animated=true" : "";
+  return `https://cdn.discordapp.com/${path}/${hash}.webp?size=${size}${animation}`;
 }
 
 export async function onRequestGet({ env, request, params }) {
@@ -40,12 +40,14 @@ export async function onRequestGet({ env, request, params }) {
   const storedAvatarUrl = settings.profile.avatarKey ? `/api/guild/${params.guildId}/asset/avatar` : "";
   const storedBannerUrl = settings.profile.bannerKey ? `/api/guild/${params.guildId}/asset/banner` : "";
   const discordAvatarUrl = discordMember?.avatar
-    ? cdnAsset(`guilds/${params.guildId}/users/${memberId}/avatars`, discordMember.avatar, 160)
-    : cdnAsset(`avatars/${memberId}`, memberUser.avatar, 160);
-  const discordBannerUrl = cdnAsset(`guilds/${params.guildId}/users/${memberId}/banners`, discordMember?.banner, 600);
+    ? cdnAsset(`guilds/${params.guildId}/users/${memberId}/avatars`, discordMember.avatar, 256)
+    : cdnAsset(`avatars/${memberId}`, memberUser.avatar, 256);
+  const discordBannerUrl = cdnAsset(`guilds/${params.guildId}/users/${memberId}/banners`, discordMember?.banner, 512);
   const preferStoredAssets = state.updatedBy === "dashboard";
   settings.profile.avatarUrl = preferStoredAssets ? storedAvatarUrl || discordAvatarUrl : discordAvatarUrl || storedAvatarUrl;
   settings.profile.bannerUrl = preferStoredAssets ? storedBannerUrl || discordBannerUrl : discordBannerUrl || storedBannerUrl;
+  settings.profile.avatarUrls = [...new Set([settings.profile.avatarUrl, discordAvatarUrl, storedAvatarUrl].filter(Boolean))];
+  settings.profile.bannerUrls = [...new Set([settings.profile.bannerUrl, discordBannerUrl, storedBannerUrl].filter(Boolean))];
   return json(
     { settings, hasGeminiKey: Boolean(state.geminiSecret), channels, version: state.version },
     200,
