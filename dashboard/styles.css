@@ -56,8 +56,7 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .discord-emoji{margin-left:auto!important;color:#b5bac1;font-size:19px}
 .profile-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
 .profile-field-form{min-width:0;align-content:start;gap:12px;margin:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
-.profile-field-form>button{max-width:100%;min-height:42px;padding:10px 14px;color:#fff;font:700 12px Manrope,sans-serif;cursor:pointer}
+.profile-field-form>button{max-width:100%;color:#fff;cursor:pointer}
 .profile-field-form>button:disabled{opacity:.55;cursor:wait}
-.profile-field-form>button::before{content:none}
 .profile-field-form .file-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:720px){.profile-editor{grid-template-columns:minmax(0,1fr)}}
