@@ -59,4 +59,5 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .profile-field-form>button{max-width:100%;color:#fff;cursor:pointer}
 .profile-field-form>button:disabled{opacity:.55;cursor:wait}
 .profile-field-form .file-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-field-form textarea[name=bio]{min-height:45px}
 @media(max-width:720px){.profile-editor{grid-template-columns:minmax(0,1fr)}}

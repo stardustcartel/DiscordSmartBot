@@ -91,6 +91,7 @@
 
   #youtube-form > button,
   #gemini-form > button,
+  #personality-form > button,
   .profile-field-form > button {
     color: #fff;
   }
@@ -133,5 +134,10 @@
 
   .discord-profile-card {
     width: min(100%, 340px);
+  }
+
+  .profile-field-form textarea[name=bio] {
+    min-height: 210px;
+    line-height: 1.6;
   }
 }
