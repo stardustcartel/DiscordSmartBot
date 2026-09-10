@@ -75,6 +75,7 @@ try {
   const sealedSession = sessionCookie.split(";")[0].slice("dashboard_session=".length);
   const session = await unseal(sealedSession, env.DASHBOARD_SESSION_SECRET);
   if (session.guilds?.[0]?.id !== "456") throw new Error("The installed server was missing from the refreshed session.");
+  if (!session.guildsVerifiedAt) throw new Error("The freshly verified server list was not cached in the session.");
   if (session.recentlyInstalledGuildId !== "456" || !session.installCompletedAt) {
     throw new Error("The recently installed server was not marked for immediate display.");
   }
@@ -93,6 +94,49 @@ try {
   }
   if (!(await authorizedGuild(env, sessionRequest, "456"))) {
     throw new Error("The newly installed server could not be opened during Discord's synchronization delay.");
+  }
+
+  const loginState = await seal(
+    { nonce: "sign-in-test", expiresAt: Date.now() + 600_000 },
+    env.DASHBOARD_SESSION_SECRET,
+  );
+  const loginReplies = [
+    { access_token: "sign-in-access" },
+    { id: "789", username: "Tester", global_name: "Tester" },
+    [{ id: "456", name: "Existing Server", icon: "server-icon", permissions: "32" }],
+    [{ id: "456", name: "Existing Server", icon: "server-icon" }],
+  ];
+  globalThis.fetch = async () => new Response(JSON.stringify(loginReplies.shift()), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  const loginCallbackResponse = await callback({
+    env,
+    request: new Request(
+      `https://discordsmartbot.pages.dev/auth/callback?code=sign-in-code&state=${encodeURIComponent(loginState)}`,
+      { headers: { Cookie: `dashboard_oauth_state=${loginState}` } },
+    ),
+  });
+  const loginSessionCookie = loginCallbackResponse.headers.getSetCookie().find((value) => value.startsWith("dashboard_session="));
+  const sealedLoginSession = loginSessionCookie.split(";")[0].slice("dashboard_session=".length);
+  const loginSession = await unseal(sealedLoginSession, env.DASHBOARD_SESSION_SECRET);
+  if (loginSession.guilds?.[0]?.id !== "456" || !loginSession.guildsVerifiedAt) {
+    throw new Error("Sign-in did not save its freshly verified installed servers.");
+  }
+
+  globalThis.fetch = async () => new Response("[]", {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  const immediateLandingResponse = await me({
+    env,
+    request: new Request("https://discordsmartbot.pages.dev/api/me", {
+      headers: { Cookie: `dashboard_session=${sealedLoginSession}` },
+    }),
+  });
+  const immediateLanding = await immediateLandingResponse.json();
+  if (immediateLanding.guilds?.[0]?.id !== "456") {
+    throw new Error("The first page load after sign-in incorrectly hid an existing server.");
   }
 
   const logoutResponse = await logout({

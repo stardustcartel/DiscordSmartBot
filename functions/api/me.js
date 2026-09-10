@@ -8,12 +8,13 @@ export async function onRequestGet({ env, request }) {
     200,
     { "Cache-Control": "no-store" },
   );
-  const currentInstallations = await installedGuilds(env);
+  const verifiedSessionIsFresh = Number(session.guildsVerifiedAt) > Date.now() - 2 * 60 * 1000;
+  const currentInstallations = verifiedSessionIsFresh ? [] : await installedGuilds(env);
   const installedById = new Map(currentInstallations.map((guild) => [guild.id, guild]));
   const recentInstallIsActive = session.recentlyInstalledGuildId
     && Number(session.installCompletedAt) > Date.now() - 2 * 60 * 1000;
   const guilds = (session.guilds || [])
-    .filter((guild) => installedById.has(String(guild.id)) || (recentInstallIsActive && String(guild.id) === session.recentlyInstalledGuildId))
+    .filter((guild) => verifiedSessionIsFresh || installedById.has(String(guild.id)) || (recentInstallIsActive && String(guild.id) === session.recentlyInstalledGuildId))
     .map((guild) => {
       const current = installedById.get(String(guild.id));
       return {

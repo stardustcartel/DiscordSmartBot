@@ -25,9 +25,13 @@ export async function onRequestGet({ env, request }) {
   const confirmedInstalledGuildId = String(token.guild?.id || "");
   const hintedInstalledGuildId = String(url.searchParams.get("guild_id") || "");
   let installedIds = new Set();
+  let installationsVerified = false;
   if (env.DISCORD_BOT_TOKEN) {
     const installedResponse = await fetch("https://discord.com/api/users/@me/guilds", { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
-    if (installedResponse.ok) installedIds = new Set((await installedResponse.json()).map((guild) => guild.id));
+    if (installedResponse.ok) {
+      installationsVerified = true;
+      installedIds = new Set((await installedResponse.json()).map((guild) => guild.id));
+    }
   }
   const installedGuildId = confirmedInstalledGuildId || (installedIds.has(hintedInstalledGuildId) ? hintedInstalledGuildId : "");
   const guilds = managed.filter((guild) => installedIds.has(guild.id) || guild.id === installedGuildId);
@@ -36,6 +40,7 @@ export async function onRequestGet({ env, request }) {
     user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar },
     guilds,
     inviteUrl,
+    guildsVerifiedAt: installationsVerified ? Date.now() : undefined,
     recentlyInstalledGuildId: confirmedInstalledGuildId || undefined,
     installCompletedAt: confirmedInstalledGuildId ? Date.now() : undefined,
     expiresAt: Date.now() + 12 * 60 * 60 * 1000,
