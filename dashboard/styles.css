@@ -59,7 +59,7 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .profile-field-form>button{max-width:100%;color:#fff;cursor:pointer}
 .profile-field-form>button:disabled{opacity:.55;cursor:wait}
 .profile-field-form .file-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.profile-field-form textarea[name=bio]{min-height:45px}
+.profile-field-form textarea[name=bio]{min-height:176px}
 @media(max-width:720px){.profile-editor{grid-template-columns:minmax(0,1fr)}}
 
 @media (min-width: 821px) {
@@ -69,5 +69,176 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 
   .landing-hero .intro h1 .heading-line {
     white-space: nowrap;
+  }
+}
+
+.empty-refresh-note {
+  display: block;
+  max-width: 440px;
+  margin: 22px auto 0;
+  color: #85839f;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+textarea {
+  scrollbar-color: #55527a #0d0d17;
+  scrollbar-width: thin;
+}
+
+textarea::-webkit-scrollbar {
+  width: 9px;
+}
+
+textarea::-webkit-scrollbar-track {
+  border-radius: 0 8px 8px 0;
+  background: #0d0d17;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  border: 2px solid #0d0d17;
+  border-radius: 999px;
+  background: #55527a;
+}
+
+#subscriptions .item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+}
+
+.subscription-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  padding: 7px 2px;
+  background: transparent;
+  color: #fff;
+  font: 700 11px Manrope, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item .subscription-view {
+  background: transparent;
+  color: #fff;
+}
+
+.subscription-view-arrow {
+  color: #fff;
+  font-size: 15px;
+  transition: transform .18s ease;
+}
+
+@media (hover: hover) {
+  .subscription-view:hover .subscription-view-arrow {
+    transform: translateX(3px);
+  }
+}
+
+.subscription-view:active .subscription-view-arrow {
+  transform: translateX(4px);
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.announcement-lightbox {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #050509c7;
+  opacity: 0;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  transition: opacity .2s ease;
+}
+
+.announcement-lightbox.open {
+  opacity: 1;
+}
+
+.announcement-dialog {
+  width: min(100%, 590px);
+  max-height: min(88vh, 720px);
+  margin: 0;
+  overflow: auto;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid #4b4974;
+  border-radius: 17px;
+  background: radial-gradient(circle at 50% 0, #6355c52b, transparent 54%), #141421;
+  box-shadow: 0 28px 90px #000c, 0 0 35px #6958e329;
+  opacity: 0;
+  transform: translateY(14px) scale(.98);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.announcement-lightbox.open .announcement-dialog {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.announcement-dialog-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.6rem, 4vw, 2.15rem);
+  letter-spacing: -.05em;
+}
+
+.announcement-dialog-heading .hint {
+  margin: 8px 0 22px;
+}
+
+.announcement-dialog textarea {
+  min-height: 176px;
+  margin-top: 8px;
+}
+
+.announcement-dialog .field-help {
+  display: block;
+  margin-top: 8px;
+}
+
+.announcement-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.announcement-dialog-actions .button {
+  min-width: 130px;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  #subscriptions .item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 12px;
+  }
+
+  .subscription-view {
+    grid-column: 1;
+    justify-self: start;
+    padding-top: 2px;
+  }
+
+  .subscription-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .announcement-lightbox {
+    padding: 14px;
+  }
+
+  .announcement-dialog {
+    max-height: 92dvh;
   }
 }

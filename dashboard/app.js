@@ -3,6 +3,8 @@ let selected = "";
 let settings = {};
 let inviteUrl = "/auth/invite";
 let dashboardReady = false;
+const defaultAnnouncementTemplate = "📺 **{channel} uploaded a new video:**\n**{title}**";
+const announcementModalState = { subscription: null, initialValue: "", trigger: null, closeTimer: null };
 
 const esc = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
 const toast = (message) => { const element = $("#toast"); element.textContent = message; element.classList.add("show"); setTimeout(() => element.classList.remove("show"), 4200); };
@@ -11,6 +13,38 @@ const api = (url, options = {}) => fetch(url, { cache: "no-store", headers: { "C
   const data = await response.json(); if (!response.ok) throw Error(data.error || "Something went wrong"); return data;
 });
 const dataUrl = (file) => new Promise((resolve, reject) => { if (!file) return resolve(""); const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+const subscriptionKey = (subscription) => `${subscription.youtubeChannelId}:${subscription.destinationChannelId}`;
+
+function openAnnouncementModal(subscription, trigger) {
+  const modal = $("#announcement-modal");
+  clearTimeout(announcementModalState.closeTimer);
+  announcementModalState.subscription = subscription;
+  announcementModalState.initialValue = subscription.announcementTemplate || defaultAnnouncementTemplate;
+  announcementModalState.trigger = trigger;
+  $("#announcement-modal-channel").textContent = subscription.sourceName || "YouTube channel";
+  $("#announcement-editor").value = announcementModalState.initialValue;
+  $("#announcement-save").hidden = true;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => {
+    modal.classList.add("open");
+    $("#announcement-editor").focus();
+  });
+}
+
+function closeAnnouncementModal() {
+  const modal = $("#announcement-modal");
+  if (modal.hidden) return;
+  modal.classList.remove("open");
+  document.body.classList.remove("modal-open");
+  const trigger = announcementModalState.trigger;
+  announcementModalState.closeTimer = setTimeout(() => {
+    modal.hidden = true;
+    announcementModalState.subscription = null;
+    announcementModalState.trigger = null;
+    trigger?.focus();
+  }, 200);
+}
 
 let updateMobileNavHint = () => {};
 function setupMobileNavigationHint() {
@@ -133,8 +167,9 @@ async function loadSettings() {
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
-  $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button data-id="${item.youtubeChannelId}">Remove</button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
-  document.querySelectorAll("#subscriptions [data-id]").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.id }) }); toast("Notification removed."); loadSettings(); }; });
+  $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}">Remove</button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
+  document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
+  document.querySelectorAll("#subscriptions .subscription-remove").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.youtubeChannelId, destinationChannelId: button.dataset.destinationChannelId }) }); toast("Notification removed."); loadSettings(); }; });
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
 $("#logout").onclick = () => { location = "/auth/logout"; };
@@ -184,9 +219,36 @@ document.querySelectorAll("[data-profile-field]").forEach((form) => {
   };
 });
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
+$("#announcement-editor").oninput = (event) => { $("#announcement-save").hidden = event.target.value === announcementModalState.initialValue; };
+$("#announcement-close").onclick = closeAnnouncementModal;
+$("#announcement-modal").onclick = (event) => { if (event.target === event.currentTarget) closeAnnouncementModal(); };
+$("#announcement-modal-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const subscription = announcementModalState.subscription;
+  if (!subscription) return;
+  const saveButton = $("#announcement-save");
+  saveButton.disabled = true;
+  try {
+    const result = await api(`/api/guild/${selected}/youtube`, {
+      method: "PUT",
+      body: JSON.stringify({
+        youtubeChannelId: subscription.youtubeChannelId,
+        destinationChannelId: subscription.destinationChannelId,
+        announcementTemplate: $("#announcement-editor").value,
+      }),
+    });
+    subscription.announcementTemplate = result.announcementTemplate;
+    closeAnnouncementModal();
+    setTimeout(() => toast("Youtube notification updated"), 210);
+  } catch (error) {
+    toast(error.message || "The YouTube notification could not be updated.");
+  } finally {
+    saveButton.disabled = false;
+  }
+};
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeDestinationMenu(); });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else closeDestinationMenu(); });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 load();

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20260911"><link rel="stylesheet" href="/mobile.css?v=20260911"></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20260912"><link rel="stylesheet" href="/mobile.css?v=20260912"></head><body>
 <header class="topbar"><a class="brand" href="/"><span class="brand-mark">✦</span><span>TheSmartBot</span></a><div class="top-actions"><span id="account" hidden></span><button id="login">Sign in with Discord</button><button id="logout" hidden>Sign out</button></div></header>
 <main>
 <section id="setup-notice" class="notice" hidden></section>
@@ -7,7 +7,7 @@
   <div class="landing-hero"><div class="intro"><p class="eyebrow">SERVER CONTROL CENTER</p><h1><span class="heading-line">Choose a server</span><br><em>to get started.</em></h1><p class="sub">Your community has loads of fun incoming with our bot powered by AI with a fully customizable personality.</p></div><figure class="feature-wordcloud feature-wordcloud-hero"><img src="/assets/wordcloud.png?v=2" alt="TheSmartBot feature word cloud: customizable bio, banner and avatar, Gemini integration, reminders, YouTube notifications, server knowledge, DMs, support staff, and more."></figure></div>
   <div id="signed-out" class="signed-out"><div class="empty-icon">✦</div><h2>Sign in to see your servers</h2><p>We'll only show servers you manage where TheSmartBot is already installed.</p></div>
   <div id="server-list" class="server-grid" hidden></div>
-  <div id="empty-servers" class="empty-state" hidden><div class="empty-icon">+</div><h2>No connected servers yet</h2><p>Install TheSmartBot in a server you manage, then come back here to customize it.</p><a id="invite" class="button" href="/auth/invite">Add TheSmartBot to a server</a></div>
+  <div id="empty-servers" class="empty-state" hidden><div class="empty-icon">+</div><h2>No connected servers yet</h2><p>Install TheSmartBot in a server you manage, then come back here to customize it.</p><a id="invite" class="button" href="/auth/invite">Add TheSmartBot to a server</a><small class="empty-refresh-note">If your server doesn't appear after you've connected, try to refresh this page.</small></div>
   <figure class="feature-wordcloud feature-wordcloud-empty" aria-hidden="true"><img src="/assets/wordcloud.png?v=2" alt=""></figure>
   <p id="server-blessing" class="server-blessing" hidden>Stay up and stay blessed.</p>
 </section>
@@ -35,7 +35,7 @@
         <button type="submit">Update nickname</button>
       </form>
       <form class="profile-field-form" data-profile-field="bio">
-        <label>Bio<textarea name="bio" rows="1" maxlength="190" placeholder="A helpful server assistant"></textarea></label>
+        <label>Bio<textarea name="bio" maxlength="190" placeholder="A helpful server assistant"></textarea></label>
         <button type="submit">Update bio</button>
       </form>
     </div>
@@ -43,4 +43,14 @@
   <section class="panel" id="gemini"><div class="panel-heading"><p class="eyebrow">GEMINI INTEGRATION</p><h2>Bring the Smart Bot to life with Gemini.</h2><p class="hint">The key belongs to this server and is encrypted before storage.</p></div><p id="key-status" class="callout"></p><form id="gemini-form"><label>Gemini API key<input name="apiKey" type="password" autocomplete="off" placeholder="Paste a new or replacement key" required></label><button>Save encrypted key</button></form><p class="fine-print">Gemini has a free tier. TheSmartBot rotates between supported free-tier models when one reaches its limit, helping keep your bot running smart. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Get a free key in Google AI Studio →</a></p></section>
   </section></div>
 </section>
-</main><p id="toast" role="status"></p><script src="/app.js"></script></body></html>
+</main>
+<div id="announcement-modal" class="announcement-lightbox" hidden>
+  <form id="announcement-modal-form" class="announcement-dialog" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
+    <div class="announcement-dialog-heading"><p class="eyebrow">YOUTUBE NOTIFICATION</p><h2 id="announcement-modal-title">Edit announcement</h2><p id="announcement-modal-channel" class="hint"></p></div>
+    <label for="announcement-editor">Current announcement message</label>
+    <textarea id="announcement-editor" name="announcementTemplate" maxlength="1500"></textarea>
+    <small class="field-help"><code>{channel}</code> and <code>{title}</code> are replaced with the actual channel name and video title.</small>
+    <div class="announcement-dialog-actions"><button type="button" id="announcement-close" class="button">Close</button><button type="submit" id="announcement-save" class="button" hidden>Save and close</button></div>
+  </form>
+</div>
+<p id="toast" role="status"></p><script src="/app.js?v=20260912"></script></body></html>
