@@ -61,3 +61,13 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .profile-field-form .file-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-field-form textarea[name=bio]{min-height:45px}
 @media(max-width:720px){.profile-editor{grid-template-columns:minmax(0,1fr)}}
+
+@media (min-width: 821px) {
+  .landing-hero .intro h1 {
+    font-size: clamp(2.7rem, 5.2vw, 4.8rem);
+  }
+
+  .landing-hero .intro h1 .heading-line {
+    white-space: nowrap;
+  }
+}

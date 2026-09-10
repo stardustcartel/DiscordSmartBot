@@ -1,6 +1,9 @@
 import { onRequestGet as invite } from "../functions/auth/invite.js";
 import { onRequestGet as callback } from "../functions/auth/callback.js";
+import { onRequestGet as logout } from "../functions/auth/logout.js";
+import { onRequestGet as me } from "../functions/api/me.js";
 import { seal, unseal } from "../functions/_lib/auth.js";
+import { authorizedGuild } from "../functions/_lib/authorize.js";
 
 const env = {
   DISCORD_APPLICATION_ID: "123",
@@ -33,6 +36,17 @@ const state = await seal(
   { nonce: "test", flow: "install", expiresAt: Date.now() + 600_000 },
   env.DASHBOARD_SESSION_SECRET,
 );
+const cancelledResponse = await callback({
+  env,
+  request: new Request(
+    `https://discordsmartbot.pages.dev/auth/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+    { headers: { Cookie: `dashboard_oauth_state=${state}` } },
+  ),
+});
+if (cancelledResponse.status !== 302 || cancelledResponse.headers.get("Location") !== "https://discordsmartbot.pages.dev/dashboard") {
+  throw new Error("Cancelling Discord authorization did not return to the dashboard.");
+}
+
 const originalFetch = globalThis.fetch;
 const replies = [
   { access_token: "access", guild: { id: "456" } },
@@ -61,8 +75,38 @@ try {
   const sealedSession = sessionCookie.split(";")[0].slice("dashboard_session=".length);
   const session = await unseal(sealedSession, env.DASHBOARD_SESSION_SECRET);
   if (session.guilds?.[0]?.id !== "456") throw new Error("The installed server was missing from the refreshed session.");
+  if (session.recentlyInstalledGuildId !== "456" || !session.installCompletedAt) {
+    throw new Error("The recently installed server was not marked for immediate display.");
+  }
+
+  globalThis.fetch = async () => new Response("[]", {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  const sessionRequest = new Request("https://discordsmartbot.pages.dev/api/me", {
+    headers: { Cookie: `dashboard_session=${sealedSession}` },
+  });
+  const meResponse = await me({ env, request: sessionRequest });
+  const mePayload = await meResponse.json();
+  if (mePayload.guilds?.[0]?.id !== "456") {
+    throw new Error("The newly installed server was hidden while Discord's bot list caught up.");
+  }
+  if (!(await authorizedGuild(env, sessionRequest, "456"))) {
+    throw new Error("The newly installed server could not be opened during Discord's synchronization delay.");
+  }
+
+  const logoutResponse = await logout({
+    env,
+    request: new Request("https://discordsmartbot.pages.dev/auth/logout"),
+  });
+  if (logoutResponse.status !== 302 || logoutResponse.headers.get("Location") !== "https://discordsmartbot.pages.dev/dashboard") {
+    throw new Error("Signing out did not return to the dashboard.");
+  }
+  if (!logoutResponse.headers.getSetCookie().some((value) => value.startsWith("dashboard_session=;"))) {
+    throw new Error("Signing out did not clear the dashboard session.");
+  }
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log("Dashboard install redirect checks passed.");
+console.log("Dashboard sign-in, install, cancellation, and sign-out checks passed.");

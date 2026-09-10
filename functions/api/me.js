@@ -10,11 +10,18 @@ export async function onRequestGet({ env, request }) {
   );
   const currentInstallations = await installedGuilds(env);
   const installedById = new Map(currentInstallations.map((guild) => [guild.id, guild]));
-  const guilds = (session.guilds || []).filter((guild) => installedById.has(String(guild.id))).map((guild) => ({
-    ...guild,
-    name: installedById.get(String(guild.id)).name || guild.name,
-    icon: installedById.get(String(guild.id)).icon,
-  }));
+  const recentInstallIsActive = session.recentlyInstalledGuildId
+    && Number(session.installCompletedAt) > Date.now() - 2 * 60 * 1000;
+  const guilds = (session.guilds || [])
+    .filter((guild) => installedById.has(String(guild.id)) || (recentInstallIsActive && String(guild.id) === session.recentlyInstalledGuildId))
+    .map((guild) => {
+      const current = installedById.get(String(guild.id));
+      return {
+        ...guild,
+        name: current?.name || guild.name,
+        icon: current ? current.icon : guild.icon,
+      };
+    });
   return json(
     { user: session.user, guilds, inviteUrl: session.inviteUrl || `/auth/invite` },
     200,

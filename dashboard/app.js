@@ -114,7 +114,7 @@ async function load() {
   try {
     const me = await api("/api/me"); dashboardReady = true; inviteUrl = me.inviteUrl || "/auth/invite";
     if (!me.user) return;
-    $("#login").hidden = true; $("#account").hidden = false; $("#account").textContent = `Signed in as ${me.user.username}`;
+    $("#login").hidden = true; $("#logout").hidden = false; $("#account").hidden = false; $("#account").textContent = `Signed in as ${me.user.username}`;
     $("#server-blessing").hidden = false;
     $("#server-screen").classList.toggle("no-connected", !me.guilds.length);
     if (!me.guilds.length) { $("#signed-out").hidden = true; $("#empty-servers").hidden = false; return; }
@@ -137,6 +137,7 @@ async function loadSettings() {
   document.querySelectorAll("#subscriptions [data-id]").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.id }) }); toast("Notification removed."); loadSettings(); }; });
 }
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
+$("#logout").onclick = () => { location = "/auth/logout"; };
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });

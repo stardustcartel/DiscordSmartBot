@@ -21,5 +21,8 @@ export async function authorizedGuild(env, request, guildId) {
   const session = await unseal(cookies(request).dashboard_session, env.DASHBOARD_SESSION_SECRET);
   if (!session || session.expiresAt < Date.now()) return null;
   if (!session.guilds?.some((guild) => guild.id === guildId)) return null;
-  return (await installedGuildIds(env)).has(String(guildId)) ? session : null;
+  if ((await installedGuildIds(env)).has(String(guildId))) return session;
+  const recentInstallIsActive = session.recentlyInstalledGuildId === String(guildId)
+    && Number(session.installCompletedAt) > Date.now() - 2 * 60 * 1000;
+  return recentInstallIsActive ? session : null;
 }
