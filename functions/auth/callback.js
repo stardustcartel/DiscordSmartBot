@@ -16,12 +16,13 @@ export async function onRequestGet({ env, request }) {
   if (!userResponse.ok || !guildResponse.ok) return json({ error: "Discord account information could not be loaded." }, 502);
   const user = await userResponse.json();
   const managed = managedGuilds(await guildResponse.json());
+  const installedGuildId = String(url.searchParams.get("guild_id") || token.guild?.id || "");
   let installedIds = new Set();
   if (env.DISCORD_BOT_TOKEN) {
     const installedResponse = await fetch("https://discord.com/api/users/@me/guilds", { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
     if (installedResponse.ok) installedIds = new Set((await installedResponse.json()).map((guild) => guild.id));
   }
-  const guilds = managed.filter((guild) => installedIds.has(guild.id));
+  const guilds = managed.filter((guild) => installedIds.has(guild.id) || guild.id === installedGuildId);
   const inviteUrl = `${publicUrl(env, request)}/auth/invite`;
   const session = await seal({ user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar }, guilds, inviteUrl, expiresAt: Date.now() + 12 * 60 * 60 * 1000 }, env.DASHBOARD_SESSION_SECRET);
   const responseHeaders = new Headers({ Location: `${publicUrl(env, request)}/dashboard` });

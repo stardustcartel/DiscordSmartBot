@@ -141,3 +141,36 @@
     line-height: 1.6;
   }
 }
+
+@media (max-width: 820px) {
+  /* Keep both signed-out and signed-in landing states on the same brand treatment. */
+  #server-screen .landing-hero .intro h1 {
+    color: #fff;
+    font-family: Manrope, system-ui, sans-serif;
+    font-style: normal;
+    font-weight: 800;
+    letter-spacing: -.072em;
+    word-spacing: .15em;
+  }
+
+  #server-screen .landing-hero .intro h1 em {
+    color: #8983ff;
+    font-family: inherit;
+    font-style: normal;
+    font-weight: inherit;
+  }
+
+  #login,
+  #empty-servers .button,
+  #empty-servers .empty-icon {
+    border-color: #9a8cf466;
+    background: linear-gradient(135deg, #6554df, #826bef);
+    box-shadow: 0 9px 24px #6655e64d;
+    color: #fff;
+  }
+
+  #login:hover,
+  #empty-servers .button:hover {
+    background: linear-gradient(135deg, #725fe8, #907af5);
+  }
+}
