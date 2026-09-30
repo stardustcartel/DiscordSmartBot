@@ -58,8 +58,21 @@ class FakeD1 {
 const env = {
   DB: new FakeD1(initialSettings),
   DASHBOARD_SESSION_SECRET: "session-secret",
+  DISCORD_BOT_TOKEN: "bot-token",
+};
+const managerId = "100000000000000001";
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (input) => {
+  const url = String(input);
+  const data = url.endsWith(`/guilds/${guildId}`) ? { owner_id: managerId }
+    : url.endsWith(`/guilds/${guildId}/roles`) ? [{ id: guildId, permissions: "0" }]
+    : url.endsWith(`/guilds/${guildId}/members/${managerId}`) ? { user: { id: managerId }, roles: [] }
+    : null;
+  if (!data) throw new Error(`Unexpected Discord request: ${url}`);
+  return new Response(JSON.stringify(data), { status: 200 });
 };
 const session = await seal({
+  user: { id: managerId, username: "Manager" },
   guilds: [{ id: guildId, name: "Test Server" }],
   guildsVerifiedAt: Date.now(),
   expiresAt: Date.now() + 60_000,
@@ -93,3 +106,4 @@ if (subscriptions.length !== 1 || subscriptions[0].destinationChannelId !== othe
 }
 
 console.log("Dashboard YouTube announcement update checks passed.");
+globalThis.fetch = originalFetch;

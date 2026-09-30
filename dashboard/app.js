@@ -3,6 +3,9 @@ let selected = "";
 let settings = {};
 let inviteUrl = "/auth/invite";
 let dashboardReady = false;
+let permissionMemberId = "";
+let permissionRoleId = "";
+let permissionSearchTimer;
 const defaultAnnouncementTemplate = "📺 **{channel} uploaded a new video:**\n**{title}**";
 const announcementModalState = { subscription: null, initialValue: "", trigger: null, closeTimer: null };
 
@@ -129,12 +132,17 @@ function showWorkspace(tab = "overview") {
   requestAnimationFrame(updateMobileNavHint);
 }
 function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add Gemini key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
-function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); requestAnimationFrame(updateMobileNavHint); }
+function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); if (tab === "permissions") loadPermissions().catch((error) => toast(error.message)); requestAnimationFrame(updateMobileNavHint); }
 function renderServers(guilds) {
   $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("") + `<a class="server-card add-server-card" href="${esc(inviteUrl)}"><span class="add-server-mark">+</span><span><strong><span class="add-server-desktop">Add TheSmartBot to another server</span><span class="add-server-mobile">Add bot to another server</span></strong><small>Choose another server you manage.</small></span><span class="chevron">→</span></a>`;
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
 }
 async function selectGuild(guildId, guild) {
+  permissionMemberId = "";
+  permissionRoleId = "";
+  $("#permission-member-search").value = "";
+  $("#permission-member-results").hidden = true;
+  closePermissionRoleMenu();
   document.querySelectorAll("[data-profile-field]").forEach((form) => {
     form.reset();
     const label = form.querySelector(".file-label");
@@ -171,6 +179,101 @@ async function loadSettings() {
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
   document.querySelectorAll("#subscriptions .subscription-remove").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.youtubeChannelId, destinationChannelId: button.dataset.destinationChannelId }) }); toast("Notification removed."); loadSettings(); }; });
 }
+
+function closePermissionRoleMenu() {
+  $("#permission-role-options").hidden = true;
+  $("#permission-role-trigger").setAttribute("aria-expanded", "false");
+  $("#permission-role-trigger").classList.remove("open");
+}
+
+async function loadPermissions() {
+  const guildId = selected;
+  if (!guildId) return;
+  const data = await api(`/api/guild/${guildId}/permissions`);
+  if (guildId !== selected) return;
+  $("#permission-editors").hidden = !data.canManagePermissions;
+  const list = $("#permission-list");
+  const self = `<div class="permission-entry"><span class="permission-person-icon" aria-hidden="true">✦</span><span class="permission-entry-name"><strong>${esc(data.currentUser.username)}</strong><small>You · signed in${data.canManagePermissions ? " · server manager" : ""}</small></span></div>`;
+  const grants = data.grants;
+  list.innerHTML = self + grants.map((grant) => `<div class="permission-entry"><span class="permission-person-icon" aria-hidden="true">${grant.subject_type === "role" ? "◆" : "✦"}</span><span class="permission-entry-name"><strong>${esc(grant.label)}</strong><small>${grant.subject_type === "role" ? "Anyone with this role" : "Member"}</small></span>${data.canManagePermissions ? `<button type="button" class="permission-remove" data-type="${grant.subject_type}" data-id="${esc(grant.subject_id)}" aria-label="Remove ${esc(grant.label)} from dashboard access" title="Remove access">×</button>` : ""}</div>`).join("");
+  list.querySelectorAll(".permission-remove").forEach((button) => { button.onclick = async () => {
+    try {
+      await api(`/api/guild/${selected}/permissions`, { method: "DELETE", body: JSON.stringify({ type: button.dataset.type, id: button.dataset.id }) });
+      toast("Dashboard access removed.");
+      await loadPermissions();
+    } catch (error) { toast(error.message); }
+  }; });
+  const grantedRoles = new Set(data.grants.filter((grant) => grant.subject_type === "role").map((grant) => grant.subject_id));
+  const roles = data.roles.filter((role) => !grantedRoles.has(role.id));
+  $("#permission-role-options").innerHTML = roles.map((role) => `<button type="button" class="select-option" role="option" data-role-id="${esc(role.id)}" data-role-name="${esc(role.name)}"><span class="permission-role-dot" style="--role-color:#${(Number(role.color) || 9539985).toString(16).padStart(6, "0")}"></span>${esc(role.name)}</button>`).join("");
+  $("#permission-role-options").querySelectorAll("[data-role-id]").forEach((button) => { button.onclick = () => {
+    permissionRoleId = button.dataset.roleId;
+    $("#permission-role-label").textContent = button.dataset.roleName;
+    $("#permission-add-role").disabled = false;
+    closePermissionRoleMenu();
+  }; });
+  if (!roles.some((role) => role.id === permissionRoleId)) {
+    permissionRoleId = "";
+    $("#permission-role-label").textContent = roles.length ? "Select a role..." : "No roles available";
+    $("#permission-add-role").disabled = true;
+  }
+  $("#permission-role-trigger").disabled = !roles.length || !data.canManagePermissions;
+}
+
+$("#permission-member-search").oninput = (event) => {
+  const query = event.target.value.trim();
+  permissionMemberId = "";
+  clearTimeout(permissionSearchTimer);
+  $("#permission-member-results").hidden = true;
+  if (query.length < 2 || /^\d{15,25}$/.test(query)) return;
+  const guildId = selected;
+  permissionSearchTimer = setTimeout(async () => {
+    try {
+      const data = await api(`/api/guild/${guildId}/permissions?query=${encodeURIComponent(query)}`);
+      if (guildId !== selected || $("#permission-member-search").value.trim() !== query) return;
+      const list = $("#permission-member-results");
+      list.innerHTML = data.members.map((member) => `<button type="button" class="select-option" role="option" data-user-id="${esc(member.id)}" data-user-name="${esc(member.name)}">${esc(member.name)} <small>@${esc(member.username)}</small></button>`).join("") || '<span class="permission-no-results">No members found. Try their Discord user ID.</span>';
+      list.hidden = false;
+      list.querySelectorAll("[data-user-id]").forEach((option) => { option.onclick = () => {
+        permissionMemberId = option.dataset.userId;
+        $("#permission-member-search").value = option.dataset.userName;
+        list.hidden = true;
+      }; });
+    } catch (error) { toast(error.message); }
+  }, 300);
+};
+
+$("#permission-member-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const id = permissionMemberId || $("#permission-member-search").value.trim();
+  try {
+    await api(`/api/guild/${selected}/permissions`, { method: "POST", body: JSON.stringify({ type: "user", id }) });
+    permissionMemberId = "";
+    $("#permission-member-search").value = "";
+    $("#permission-member-results").hidden = true;
+    toast("Member can now access this dashboard.");
+    await loadPermissions();
+  } catch (error) { toast(error.message); }
+};
+
+$("#permission-role-trigger").onclick = () => {
+  const list = $("#permission-role-options");
+  const opening = list.hidden;
+  list.hidden = !opening;
+  $("#permission-role-trigger").setAttribute("aria-expanded", String(opening));
+  $("#permission-role-trigger").classList.toggle("open", opening);
+};
+
+$("#permission-role-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (!permissionRoleId) return;
+  try {
+    await api(`/api/guild/${selected}/permissions`, { method: "POST", body: JSON.stringify({ type: "role", id: permissionRoleId }) });
+    permissionRoleId = "";
+    toast("Members with this role can now access the dashboard.");
+    await loadPermissions();
+  } catch (error) { toast(error.message); }
+};
 $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast("The secure dashboard service is not available yet.");
 $("#logout").onclick = () => { location = "/auth/logout"; };
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
@@ -247,8 +350,8 @@ $("#announcement-modal-form").onsubmit = async (event) => {
   }
 };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
-document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else closeDestinationMenu(); });
+document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closePermissionRoleMenu(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 load();

@@ -1,4 +1,5 @@
-import { cookie, cookies, json, managedGuilds, publicUrl, seal, unseal } from "../_lib/auth.js";
+import { cookie, cookies, json, publicUrl, seal, unseal } from "../_lib/auth.js";
+import { guildAccess } from "../_lib/authorize.js";
 
 export async function onRequestGet({ env, request }) {
   const url = new URL(request.url);
@@ -21,7 +22,7 @@ export async function onRequestGet({ env, request }) {
   const [userResponse, guildResponse] = await Promise.all([fetch("https://discord.com/api/users/@me", { headers }), fetch("https://discord.com/api/users/@me/guilds", { headers })]);
   if (!userResponse.ok || !guildResponse.ok) return json({ error: "Discord account information could not be loaded." }, 502);
   const user = await userResponse.json();
-  const managed = managedGuilds(await guildResponse.json());
+  const memberGuilds = await guildResponse.json();
   const confirmedInstalledGuildId = String(token.guild?.id || "");
   const hintedInstalledGuildId = String(url.searchParams.get("guild_id") || "");
   let installedIds = new Set();
@@ -34,7 +35,14 @@ export async function onRequestGet({ env, request }) {
     }
   }
   const installedGuildId = confirmedInstalledGuildId || (installedIds.has(hintedInstalledGuildId) ? hintedInstalledGuildId : "");
-  const guilds = managed.filter((guild) => installedIds.has(guild.id) || guild.id === installedGuildId);
+  const candidates = memberGuilds.filter((guild) => installedIds.has(String(guild.id)) || String(guild.id) === installedGuildId);
+  const accessResults = await Promise.all(candidates.map((guild) => guildAccess(env, String(guild.id), String(user.id)).catch(() => null)));
+  const guilds = candidates.filter((guild, index) => {
+    if (accessResults[index]) return true;
+    if (String(guild.id) !== confirmedInstalledGuildId) return false;
+    const permissions = BigInt(guild.permissions || "0");
+    return (permissions & (0x20n | 0x8n)) !== 0n;
+  }).map(({ id, name, icon }) => ({ id, name, icon }));
   const inviteUrl = `${publicUrl(env, request)}/auth/invite`;
   const session = await seal({
     user: { id: user.id, username: user.global_name || user.username, avatar: user.avatar },

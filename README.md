@@ -121,6 +121,15 @@ permission to View Channel and Send Messages in the selected destination.
 
 ## Customer dashboard
 
+The Permissions tab lets a server manager grant dashboard editing access to a
+specific server member or a server role. Members sign in with their own Discord
+account and see the server in their server chooser. Server owners and people
+with Discord's Manage Server or Administrator permission retain access; only
+they can change dashboard permissions. Delegated editors can change bot
+settings but cannot grant access to others. Membership and roles are checked
+again on each dashboard request, so removed permissions take effect without
+waiting for a new sign-in. The bot must already be installed in the server.
+
 The dashboard is served from the top-level `dashboard` directory and its
 Cloudflare Pages Functions use Discord OAuth. A person can only manage a server
 when they have Manage Server permission. Configure these private Cloudflare
