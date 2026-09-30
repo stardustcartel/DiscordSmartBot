@@ -12,12 +12,16 @@ export async function onRequestGet({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   if (!env.DISCORD_BOT_TOKEN) return json({ error: "The bot connection is not configured yet." }, 503);
   const discordHeaders = { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
-  const [channelResponse, botUserResponse] = await Promise.all([
+  const [channelResponse, roleResponse, botUserResponse] = await Promise.all([
     fetch(`https://discord.com/api/guilds/${params.guildId}/channels`, { headers: discordHeaders }),
+    fetch(`https://discord.com/api/guilds/${params.guildId}/roles`, { headers: discordHeaders }),
     fetch("https://discord.com/api/users/@me", { headers: discordHeaders }),
   ]);
   if (!channelResponse.ok) return json({ error: "The bot could not load this server's channels." }, 502);
   const channels = (await channelResponse.json()).filter((channel) => channel.type === 0).map((channel) => ({ id: channel.id, name: channel.name }));
+  const roles = roleResponse.ok
+    ? (await roleResponse.json()).filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => ({ id: role.id, name: role.name, color: role.color }))
+    : [];
   let botUser = {};
   if (botUserResponse.ok) {
     try { botUser = await botUserResponse.json(); } catch { botUser = {}; }
@@ -49,7 +53,7 @@ export async function onRequestGet({ env, request, params }) {
   settings.profile.avatarUrls = [...new Set([settings.profile.avatarUrl, discordAvatarUrl, storedAvatarUrl].filter(Boolean))];
   settings.profile.bannerUrls = [...new Set([settings.profile.bannerUrl, discordBannerUrl, storedBannerUrl].filter(Boolean))];
   return json(
-    { settings, hasGeminiKey: Boolean(state.geminiSecret), channels, version: state.version },
+    { settings, hasGeminiKey: Boolean(state.geminiSecret), channels, roles, version: state.version },
     200,
     { "Cache-Control": "no-store" },
   );

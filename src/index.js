@@ -345,6 +345,21 @@ function getSettingsForGuild(guildId) {
     : guildSettings.getDirectMessageSettings();
 }
 
+function canUseBotInGuild({ guildId, channelId, member }) {
+  if (!guildId) return true;
+  const settings = getSettingsForGuild(guildId);
+  const allowedChannels = settings.botResponseChannelIds || [];
+  if (allowedChannels.length > 0 && !allowedChannels.includes(String(channelId))) return false;
+  const allowedRoles = settings.botAccessRoleIds || [];
+  if (allowedRoles.length === 0) return true;
+  const memberRoleIds = Array.isArray(member?.roles)
+    ? member.roles.map(String)
+    : member?.roles?.cache
+      ? [...member.roles.cache.keys()].map(String)
+      : [];
+  return memberRoleIds.some((roleId) => allowedRoles.includes(roleId));
+}
+
 async function requestAiResponse({ guildId, userId, text }) {
   const settings = getSettingsForGuild(guildId);
   return ai.respond({
@@ -359,6 +374,10 @@ async function requestAiResponse({ guildId, userId, text }) {
 
 async function handleChatInteraction(interaction) {
   const text = interaction.options.getString("message", true).trim();
+  if (!canUseBotInGuild({ guildId: interaction.guildId, channelId: interaction.channelId, member: interaction.member })) {
+    await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
+    return;
+  }
   await interaction.deferReply();
   try {
     const response = await requestAiResponse({
@@ -980,7 +999,10 @@ client.on(Events.MessageCreate, (message) => {
     : message.content.trim();
   isReplyToBot(message)
     .then((replied) => {
-      if (mentioned || replied) return handleTextChat(message, text);
+      if (mentioned || replied) {
+        if (!canUseBotInGuild({ guildId: message.guildId, channelId: message.channelId, member: message.member })) return null;
+        return handleTextChat(message, text);
+      }
       return null;
     })
     .catch((error) => console.error("Message handling failed:", error.message));

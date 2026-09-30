@@ -2,6 +2,8 @@ const defaultSettings = {
   profile: { nickname: "", bio: "", avatarPath: "", bannerPath: "", avatarKey: "", bannerKey: "" },
   personality: "You are a helpful, friendly Discord assistant.",
   knowledgeChannelIds: [],
+  botResponseChannelIds: [],
+  botAccessRoleIds: [],
   youtubeSubscriptions: [],
   reminderTimeZone: "America/Los_Angeles",
   aiResponsesPerHour: 30,

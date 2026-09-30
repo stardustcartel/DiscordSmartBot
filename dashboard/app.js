@@ -9,6 +9,8 @@ let permissionSearchTimer;
 const defaultAnnouncementTemplate = "📺 **{channel} uploaded a new video:**\n**{title}**";
 const announcementModalState = { subscription: null, initialValue: "", trigger: null, closeTimer: null };
 
+$("#profile .eyebrow").textContent = "CUSTOMIZE BOT";
+
 const esc = (value) => String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
 const toast = (message) => { const element = $("#toast"); element.textContent = message; element.classList.add("show"); setTimeout(() => element.classList.remove("show"), 4200); };
 const api = (url, options = {}) => fetch(url, { cache: "no-store", headers: { "Content-Type": "application/json" }, ...options }).then(async (response) => {
@@ -83,6 +85,75 @@ function setupMobileNavigationHint() {
 
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
+let botAccessChannels = [];
+let botAccessRoles = [];
+let botAccessSelections = { channels: new Set(), roles: new Set() };
+
+function closeBotAccessMenus() {
+  ["channels", "roles"].forEach((kind) => {
+    $(`#bot-${kind === "channels" ? "channel" : "role"}-options`).hidden = true;
+    const trigger = $(`#bot-${kind === "channels" ? "channel" : "role"}-trigger`);
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.classList.remove("open");
+  });
+  document.querySelectorAll(".bot-access-card").forEach((card) => card.classList.remove("menu-open"));
+}
+
+function updateBotAccessLabel(kind) {
+  const items = kind === "channels" ? botAccessChannels : botAccessRoles;
+  const selectedItems = items.filter((item) => botAccessSelections[kind].has(item.id));
+  const label = $(`#bot-${kind === "channels" ? "channel" : "role"}-label`);
+  if (!selectedItems.length) label.textContent = kind === "channels" ? "All text channels" : "All server roles";
+  else if (selectedItems.length === 1) label.textContent = kind === "channels" ? `# ${selectedItems[0].name}` : selectedItems[0].name;
+  else label.textContent = `${selectedItems.length} ${kind === "channels" ? "channels" : "roles"} selected`;
+}
+
+function renderBotAccessOptions(kind) {
+  const items = kind === "channels" ? botAccessChannels : botAccessRoles;
+  const list = $(`#bot-${kind === "channels" ? "channel" : "role"}-options`);
+  list.innerHTML = items.length ? items.map((item) => {
+    const selectedItem = botAccessSelections[kind].has(item.id);
+    const roleDot = kind === "roles" ? `<span class="permission-role-dot" style="--role-color:#${(Number(item.color) || 9539985).toString(16).padStart(6, "0")}"></span>` : "";
+    return `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${selectedItem}" data-bot-access-kind="${kind}" data-id="${esc(item.id)}">${roleDot}<span class="multi-select-check" aria-hidden="true">✓</span><span>${kind === "channels" ? "# " : ""}${esc(item.name)}</span></button>`;
+  }).join("") : '<span class="permission-no-results">No options are available.</span>';
+  list.querySelectorAll("[data-bot-access-kind]").forEach((option) => {
+    option.onclick = () => {
+      const selectedIds = botAccessSelections[kind];
+      if (selectedIds.has(option.dataset.id)) selectedIds.delete(option.dataset.id);
+      else selectedIds.add(option.dataset.id);
+      renderBotAccessOptions(kind);
+      updateBotAccessLabel(kind);
+    };
+  });
+}
+
+function renderBotAccessControls(channels, roles) {
+  botAccessChannels = channels;
+  botAccessRoles = roles;
+  botAccessSelections = {
+    channels: new Set((settings.botResponseChannelIds || []).filter((id) => channels.some((channel) => channel.id === id))),
+    roles: new Set((settings.botAccessRoleIds || []).filter((id) => roles.some((role) => role.id === id))),
+  };
+  ["channels", "roles"].forEach((kind) => {
+    renderBotAccessOptions(kind);
+    updateBotAccessLabel(kind);
+    const trigger = $(`#bot-${kind === "channels" ? "channel" : "role"}-trigger`);
+    trigger.disabled = !(kind === "channels" ? channels : roles).length;
+  });
+}
+
+function toggleBotAccessMenu(kind) {
+  const name = kind === "channels" ? "channel" : "role";
+  const list = $(`#bot-${name}-options`);
+  const opening = list.hidden;
+  closeBotAccessMenus();
+  if (!opening) return;
+  list.hidden = false;
+  $(`#bot-${name}-trigger`).setAttribute("aria-expanded", "true");
+  $(`#bot-${name}-trigger`).classList.add("open");
+  $(`#bot-${name}-card`).classList.add("menu-open");
+}
+
 let profilePreviewRevision = 0;
 function renderProfilePreview(profile = {}, version = "") {
   const revision = ++profilePreviewRevision;
@@ -174,6 +245,7 @@ async function loadSettings() {
   $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
+  renderBotAccessControls(data.channels || [], data.roles || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
@@ -335,6 +407,20 @@ document.querySelectorAll("[data-profile-field]").forEach((form) => {
     }
   };
 });
+$("#bot-access-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const guildId = selected;
+  try {
+    const data = await api(`/api/guild/${guildId}/bot-access`, {
+      method: "PUT",
+      body: JSON.stringify({ channelIds: [...botAccessSelections.channels], roleIds: [...botAccessSelections.roles] }),
+    });
+    if (guildId !== selected) return;
+    settings.botResponseChannelIds = data.channelIds;
+    settings.botAccessRoleIds = data.roleIds;
+    toast("Bot access saved.");
+  } catch (error) { toast(error.message || "Could not save bot access."); }
+};
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
 $("#announcement-editor").oninput = (event) => { $("#announcement-save").hidden = event.target.value === announcementModalState.initialValue; };
 $("#announcement-close").onclick = closeAnnouncementModal;
@@ -364,8 +450,10 @@ $("#announcement-modal-form").onsubmit = async (event) => {
   }
 };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
-document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closePermissionRoleMenu(); $("#permission-member-results").hidden = true; } });
+$("#bot-channel-trigger").onclick = () => toggleBotAccessMenu("channels");
+$("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
+document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 load();

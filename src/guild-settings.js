@@ -98,6 +98,8 @@ class GuildSettingsStore {
       },
       personality: this.defaultPersonality,
       knowledgeChannelIds: [],
+      botResponseChannelIds: [],
+      botAccessRoleIds: [],
       youtubeSubscriptions: [],
       reminderTimeZone: this.config.defaultReminderTimeZone,
       aiResponsesPerHour: this.config.defaultAiResponsesPerHour,
@@ -122,6 +124,8 @@ class GuildSettingsStore {
       personality:
         cleanText(value?.personality, 12_000) || defaults.personality,
       knowledgeChannelIds: cleanChannelIds(value?.knowledgeChannelIds),
+      botResponseChannelIds: cleanChannelIds(value?.botResponseChannelIds),
+      botAccessRoleIds: cleanChannelIds(value?.botAccessRoleIds),
       youtubeSubscriptions: cleanYouTubeSubscriptions(value?.youtubeSubscriptions),
       reminderTimeZone: timeZone || defaults.reminderTimeZone,
       aiResponsesPerHour:
@@ -178,6 +182,10 @@ class GuildSettingsStore {
       ...current,
       personality,
     }));
+  }
+
+  setBotAccess(guildId, changes) {
+    return this.update(guildId, (current) => ({ ...current, ...changes }));
   }
 
   addKnowledgeChannel(guildId, channelId) {
