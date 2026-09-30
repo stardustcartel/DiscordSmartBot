@@ -110,6 +110,8 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .permission-card{margin-top:20px;padding:22px;border:1px solid #373652;border-radius:14px;background:linear-gradient(145deg,#1c1b2d,#151521)}
+.permission-role-card{transition:padding-bottom .2s ease}
+.permission-role-card.role-menu-open{padding-bottom:280px}
 .permission-card h3{margin:0 0 8px;color:var(--text);font-size:15px;font-weight:800}
 .permission-card .hint{margin:0 0 18px;font-size:12px}
 .permission-list{display:grid;gap:8px}
@@ -141,6 +143,14 @@ textarea::-webkit-scrollbar-thumb {
 .permission-no-results{display:block;padding:10px;color:var(--muted);font-size:11px}
 @media(max-width:920px){.permission-editors{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.permission-card{padding:16px}.permission-control{flex-direction:column}.permission-search-wrap,.permission-role-wrap,.permission-control>button{width:100%}}
+
+.select-menu{scrollbar-width:thin;scrollbar-color:#5e5978 transparent}
+.select-menu::-webkit-scrollbar{width:7px;height:7px}
+.select-menu::-webkit-scrollbar-track{background:transparent}
+.select-menu::-webkit-scrollbar-thumb{min-height:34px;border:2px solid #151524;border-radius:999px;background:#5e5978}
+.select-menu::-webkit-scrollbar-thumb:hover{background:#8178aa}
+.select-menu::-webkit-scrollbar-button{display:none;width:0;height:0}
+.select-menu::-webkit-scrollbar-corner{background:transparent}
 
 .subscription-view {
   position: absolute;

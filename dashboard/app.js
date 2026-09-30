@@ -184,6 +184,7 @@ function closePermissionRoleMenu() {
   $("#permission-role-options").hidden = true;
   $("#permission-role-trigger").setAttribute("aria-expanded", "false");
   $("#permission-role-trigger").classList.remove("open");
+  $(".permission-role-card").classList.remove("role-menu-open");
 }
 
 async function loadPermissions() {
@@ -274,6 +275,7 @@ $("#permission-role-trigger").onclick = () => {
   list.hidden = !opening;
   $("#permission-role-trigger").setAttribute("aria-expanded", String(opening));
   $("#permission-role-trigger").classList.toggle("open", opening);
+  $(".permission-role-card").classList.toggle("role-menu-open", opening);
 };
 
 $("#permission-role-form").onsubmit = async (event) => {
