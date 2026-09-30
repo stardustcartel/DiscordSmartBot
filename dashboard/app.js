@@ -193,9 +193,21 @@ async function loadPermissions() {
   if (guildId !== selected) return;
   $("#permission-editors").hidden = !data.canManagePermissions;
   const list = $("#permission-list");
-  const self = `<div class="permission-entry"><span class="permission-person-icon" aria-hidden="true">✦</span><span class="permission-entry-name"><strong>${esc(data.currentUser.username)}</strong><small>You · signed in${data.canManagePermissions ? " · server manager" : ""}</small></span></div>`;
-  const grants = data.grants;
-  list.innerHTML = self + grants.map((grant) => `<div class="permission-entry"><span class="permission-person-icon" aria-hidden="true">${grant.subject_type === "role" ? "◆" : "✦"}</span><span class="permission-entry-name"><strong>${esc(grant.label)}</strong><small>${grant.subject_type === "role" ? "Anyone with this role" : "Member"}</small></span>${data.canManagePermissions ? `<button type="button" class="permission-remove" data-type="${grant.subject_type}" data-id="${esc(grant.subject_id)}" aria-label="Remove ${esc(grant.label)} from dashboard access" title="Remove access">×</button>` : ""}</div>`).join("");
+  const avatar = (person) => person.avatarUrl
+    ? `<span class="permission-person-icon"><img src="${esc(person.avatarUrl)}" alt="${esc(person.name || person.username)}'s Discord profile picture"></span>`
+    : `<span class="permission-person-icon permission-avatar-fallback" aria-hidden="true">${esc((person.name || person.username || "?").slice(0, 1).toUpperCase())}</span>`;
+  const personRow = (person, detail, extraClass = "") => `<div class="permission-entry ${extraClass}">${avatar(person)}<span class="permission-entry-name"><strong>${esc(person.name || person.username)}</strong><small>${esc(detail)}</small></span></div>`;
+  const self = personRow(data.currentUser, `You · signed in${data.canManagePermissions ? " · server manager" : ""}`, "permission-current-user");
+  const owner = data.owner && data.owner.id !== data.currentUser.id
+    ? personRow(data.owner, "Server owner · always has access", "permission-owner")
+    : "";
+  const grants = data.grants.filter((grant) => grant.subject_type !== "user" || (grant.subject_id !== data.currentUser.id && grant.subject_id !== data.owner?.id));
+  list.innerHTML = self + owner + grants.map((grant) => {
+    const identity = grant.subject_type === "role"
+      ? `<span class="permission-person-icon permission-role-icon" style="--role-color:#${(Number(grant.color) || 9539985).toString(16).padStart(6, "0")}" aria-hidden="true"><span></span></span>`
+      : avatar({ name: grant.label, avatarUrl: grant.avatarUrl });
+    return `<div class="permission-entry">${identity}<span class="permission-entry-name"><strong>${esc(grant.label)}</strong><small>${grant.subject_type === "role" ? "Anyone with this role" : "Dashboard member"}</small></span>${data.canManagePermissions ? `<button type="button" class="permission-remove" data-type="${grant.subject_type}" data-id="${esc(grant.subject_id)}" aria-label="Remove ${esc(grant.label)} from dashboard access" title="Remove access">×</button>` : ""}</div>`;
+  }).join("");
   list.querySelectorAll(".permission-remove").forEach((button) => { button.onclick = async () => {
     try {
       await api(`/api/guild/${selected}/permissions`, { method: "DELETE", body: JSON.stringify({ type: button.dataset.type, id: button.dataset.id }) });

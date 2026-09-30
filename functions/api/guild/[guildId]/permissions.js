@@ -4,6 +4,32 @@ import { ensureSchema } from "../../../_lib/db.js";
 
 const snowflake = /^\d{15,25}$/;
 
+function avatarUrl(member) {
+  const user = member?.user;
+  if (!user?.id) return "";
+  if (member.avatar) return `https://cdn.discordapp.com/guilds/${member.guildId}/users/${user.id}/avatars/${member.avatar}.webp?size=128`;
+  if (user.avatar) return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=128`;
+  const legacyIndex = Number.parseInt(user.discriminator || "0", 10);
+  const index = legacyIndex > 0 ? legacyIndex % 5 : Number((BigInt(user.id) >> 22n) % 6n);
+  return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
+
+function memberSummary(member, guildId) {
+  if (!member?.user) return null;
+  return {
+    id: String(member.user.id),
+    name: member.nick || member.user.global_name || member.user.username || "Discord member",
+    username: member.user.username || "",
+    avatarUrl: avatarUrl({ ...member, guildId }),
+  };
+}
+
+async function fetchMember(env, guildId, userId) {
+  const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+  if (!response.ok) return null;
+  try { return await response.json(); } catch { return null; }
+}
+
 async function accessFor({ env, request, params }) {
   return authorizedGuild(env, request, params.guildId);
 }
@@ -24,7 +50,24 @@ export async function onRequestGet(context) {
   await ensureSchema(env.DB);
   const rows = await env.DB.prepare("SELECT subject_type, subject_id, label FROM dashboard_permissions WHERE guild_id = ? ORDER BY created_at, subject_type, subject_id").bind(params.guildId).all();
   const roles = access.access.data.roles.filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => ({ id: role.id, name: role.name, color: role.color }));
-  return json({ currentUser: access.user, canManagePermissions: access.access.canManagePermissions, grants: rows.results || [], roles }, 200, { "Cache-Control": "no-store" });
+  const grants = rows.results || [];
+  const explicitUserIds = grants.filter((grant) => grant.subject_type === "user").map((grant) => String(grant.subject_id));
+  const ownerId = String(access.access.data.guild.owner_id || "");
+  const memberIds = [...new Set([ownerId, ...explicitUserIds].filter((id) => snowflake.test(id)))];
+  const memberResults = await Promise.all(memberIds.map((id) => fetchMember(env, params.guildId, id)));
+  const membersById = new Map(memberIds.map((id, index) => [id, memberResults[index]]));
+  const currentMember = access.access.data.member;
+  const currentUser = memberSummary(currentMember, params.guildId) || { ...access.user, avatarUrl: "" };
+  const owner = memberSummary(membersById.get(ownerId), params.guildId);
+  const enrichedGrants = grants.map((grant) => {
+    if (grant.subject_type === "role") {
+      const role = roles.find((item) => String(item.id) === String(grant.subject_id));
+      return { ...grant, color: role?.color || 0 };
+    }
+    const member = memberSummary(membersById.get(String(grant.subject_id)), params.guildId);
+    return { ...grant, label: member?.name || grant.label, avatarUrl: member?.avatarUrl || "" };
+  });
+  return json({ currentUser, owner, canManagePermissions: access.access.canManagePermissions, grants: enrichedGrants, roles }, 200, { "Cache-Control": "no-store" });
 }
 
 export async function onRequestPost(context) {

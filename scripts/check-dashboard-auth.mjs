@@ -2,7 +2,7 @@ import { onRequestGet as invite } from "../functions/auth/invite.js";
 import { onRequestGet as callback } from "../functions/auth/callback.js";
 import { onRequestGet as logout } from "../functions/auth/logout.js";
 import { onRequestGet as me } from "../functions/api/me.js";
-import { onRequestPost as grant, onRequestDelete as revoke } from "../functions/api/guild/[guildId]/permissions.js";
+import { onRequestGet as permissions, onRequestPost as grant, onRequestDelete as revoke } from "../functions/api/guild/[guildId]/permissions.js";
 import { seal, unseal } from "../functions/_lib/auth.js";
 import { authorizedGuild } from "../functions/_lib/authorize.js";
 
@@ -11,6 +11,7 @@ const managerId = "100000000000000001";
 const editorId = "100000000000000002";
 const roleEditorId = "100000000000000003";
 const strangerId = "100000000000000004";
+const ownerId = "999999999999999999";
 const managerRoleId = "200000000000000001";
 const editorRoleId = "200000000000000002";
 const origin = "https://discordsmartbot.pages.dev";
@@ -53,6 +54,7 @@ const members = new Map([
   [editorId, { user: { id: editorId, username: "Editor" }, roles: [] }],
   [roleEditorId, { user: { id: roleEditorId, username: "RoleEditor" }, roles: [editorRoleId] }],
   [strangerId, { user: { id: strangerId, username: "Stranger" }, roles: [] }],
+  [ownerId, { user: { id: ownerId, username: "Owner" }, roles: [] }],
 ]);
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 const originalFetch = globalThis.fetch;
@@ -64,7 +66,7 @@ globalThis.fetch = async (input, options = {}) => {
     return json(members.get(id)?.user || { id, username: "Unknown" });
   }
   if (url.endsWith("/users/@me/guilds")) return json([{ id: guildId, name: "Test server", icon: null, permissions: "0" }]);
-  if (url.endsWith(`/guilds/${guildId}`)) return json({ id: guildId, owner_id: "999999999999999999" });
+  if (url.endsWith(`/guilds/${guildId}`)) return json({ id: guildId, owner_id: ownerId });
   if (url.endsWith(`/guilds/${guildId}/roles`)) return json([
     { id: guildId, name: "@everyone", permissions: "0" },
     { id: managerRoleId, name: "Manager", permissions: "32" },
@@ -97,6 +99,9 @@ try {
   if (addUser.status !== 200) throw new Error("Manager could not add a member.");
   const editor = await signIn(editorId);
   if (editor.session.guilds.length !== 1 || (await me({ env, request: editor.request })).status !== 200 || !(await authorizedGuild(env, editor.request, guildId))) throw new Error("The granted member could not open the dashboard.");
+  const permissionResponse = await permissions({ env, request: manager.request, params: { guildId } });
+  const permissionPayload = await permissionResponse.json();
+  if (permissionPayload.owner?.id !== ownerId || !permissionPayload.owner.avatarUrl || !permissionPayload.currentUser.avatarUrl || !permissionPayload.grants[0]?.avatarUrl) throw new Error("Permission profiles did not include Discord avatars or the server owner.");
   const deniedGrant = await grant({ env, request: new Request(`${origin}/api/guild/${guildId}/permissions`, { method: "POST", headers: { Cookie: editor.request.headers.get("Cookie") }, body: JSON.stringify({ type: "user", id: strangerId }) }), params: { guildId } });
   if (deniedGrant.status !== 403) throw new Error("A delegated editor could grant additional access.");
   await revoke({ env, request: new Request(`${origin}/api/guild/${guildId}/permissions`, { method: "DELETE", headers: { Cookie: manager.request.headers.get("Cookie") }, body: JSON.stringify({ type: "user", id: editorId }) }), params: { guildId } });
@@ -111,6 +116,8 @@ try {
   members.get(roleEditorId).roles = [editorRoleId];
   const stranger = await signIn(strangerId);
   if (stranger.session.guilds.length || (await authorizedGuild(env, stranger.request, guildId))) throw new Error("An ungranted member got access.");
+  const owner = await signIn(ownerId);
+  if (owner.session.guilds.length !== 1 || !(await authorizedGuild(env, owner.request, guildId))) throw new Error("The server owner did not receive automatic dashboard access.");
 
   await revoke({ env, request: new Request(`${origin}/api/guild/${guildId}/permissions`, { method: "DELETE", headers: { Cookie: manager.request.headers.get("Cookie") }, body: JSON.stringify({ type: "role", id: editorRoleId }) }), params: { guildId } });
   if (await authorizedGuild(env, roleEditor.request, guildId)) throw new Error("Removed role access remained active.");
