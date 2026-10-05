@@ -83,6 +83,7 @@ class AiChat {
           model: this.config.openAiModel || "gpt-6-luna",
           instructions: String(personality || "").trim() || fallbackPersonality,
           input: conversation.map((message) => ({ role: message.role, content: message.text })),
+          reasoning: { effort: "none" },
           max_output_tokens: 1200,
           store: false,
         }),

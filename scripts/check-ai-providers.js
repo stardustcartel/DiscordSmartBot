@@ -48,6 +48,7 @@ async function main() {
   assert.equal(requests[0].body.model, "gpt-6-luna");
   assert.equal(requests[0].body.instructions, "Be cheerful.");
   assert.equal(requests[0].body.store, false);
+  assert.equal(requests[0].body.reasoning.effort, "none");
   assert.equal(requests[0].options.headers.Authorization, "Bearer second-openai-key");
   await ai.respond({ ...args, text: "Again" });
   assert.deepEqual(requests[1].body.input.map((entry) => entry.role), ["user", "assistant", "user"]);
