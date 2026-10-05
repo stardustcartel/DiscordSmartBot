@@ -24,6 +24,7 @@ const env = {
   DB: {
     async batch() { return []; },
     prepare(sql) {
+      if (sql.startsWith("PRAGMA table_info")) return { async all() { return { results: [{ name: "openai_secret_json" }] }; } };
       return { bind(...args) {
         return {
           async all() {

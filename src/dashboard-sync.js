@@ -31,7 +31,7 @@ class DashboardSync {
       assets[kind] = { contentType: extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : extension === ".webp" ? "image/webp" : "image/png", base64: fs.readFileSync(filePath).toString("base64") };
     }
     settings.profile = { ...settings.profile, avatarPath: "", bannerPath: "" };
-    return { guildId, settings, geminiSecret: this.guildSecrets.getEncryptedGeminiKey(guildId), assets };
+    return { guildId, settings, geminiSecret: this.guildSecrets.getEncryptedGeminiKey(guildId), openaiSecret: this.guildSecrets.getEncryptedOpenAiKey(guildId), assets };
   }
 
   async downloadAsset(guildId, kind) {
@@ -54,6 +54,7 @@ class DashboardSync {
     else next.profile.bannerPath = current.profile.bannerPath;
     const settings = this.guildSettings.replaceFromSync(remote.guildId, next);
     this.guildSecrets.replaceEncryptedFromSync(remote.guildId, remote.geminiSecret);
+    this.guildSecrets.replaceEncryptedOpenAiFromSync(remote.guildId, remote.openaiSecret);
     const guild = client.guilds.cache.get(remote.guildId);
     if (guild) {
       const body = { nick: settings.profile.nickname || null, bio: settings.profile.bio || "" };

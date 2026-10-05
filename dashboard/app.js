@@ -202,8 +202,8 @@ function showWorkspace(tab = "overview") {
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
   requestAnimationFrame(updateMobileNavHint);
 }
-function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add Gemini key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
-function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid Gemini key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); if (tab === "permissions") loadPermissions().catch((error) => toast(error.message)); requestAnimationFrame(updateMobileNavHint); }
+function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add an AI key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
+function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid AI key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); if (tab === "permissions") loadPermissions().catch((error) => toast(error.message)); requestAnimationFrame(updateMobileNavHint); }
 function renderServers(guilds) {
   $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("") + `<a class="server-card add-server-card" href="${esc(inviteUrl)}"><span class="add-server-mark">+</span><span><strong><span class="add-server-desktop">Add TheSmartBot to another server</span><span class="add-server-mobile">Add bot to another server</span></strong><small>Choose another server you manage.</small></span><span class="chevron">→</span></a>`;
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
@@ -251,6 +251,16 @@ function renderGeminiKeyStatus(data) {
     : "Previous key: No replacement details recorded.";
 }
 
+function renderOpenAiKeyStatus(data) {
+  $("#openai-key-status-main").textContent = data.hasOpenAiKey ? "An OpenAI key is configured for this server." : "No OpenAI key is configured yet.";
+  $("#openai-key-status-history").hidden = !data.hasOpenAiKey;
+  if (!data.hasOpenAiKey) return;
+  $("#openai-key-current-history").textContent = `Current key: ${formatGeminiKeyEvent(data.openAiKeyHistory?.current)}`;
+  $("#openai-key-previous-history").textContent = data.openAiKeyHistory?.previous
+    ? `Previous key: ${formatGeminiKeyEvent(data.openAiKeyHistory.previous)}`
+    : "Previous key: No replacement details recorded.";
+}
+
 async function loadSettings() {
   const guildId = selected;
   const data = await api(`/api/guild/${guildId}/settings`);
@@ -260,7 +270,9 @@ async function loadSettings() {
   $("#profile-editor [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-editor [name=bio]").value = settings.profile?.bio || "";
   renderProfilePreview(settings.profile, data.version);
   renderGeminiKeyStatus(data);
-  setPersonalityLock(!data.hasGeminiKey);
+  renderOpenAiKeyStatus(data);
+  $("#ai-provider").value = settings.aiProvider === "openai" ? "openai" : "gemini";
+  setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels(data.channels || []);
   renderBotAccessControls(data.channels || [], data.roles || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
@@ -385,6 +397,8 @@ document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick =
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
+$("#openai-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); await loadSettings(); toast(result.message || "OpenAI key verified and saved."); } catch (error) { toast(error.message || "That OpenAI key could not be verified."); } };
+$("#provider-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/ai-provider`, { method: "PUT", body: JSON.stringify({ provider: $("#ai-provider").value }) }); await loadSettings(); toast(result.message || "AI provider updated."); } catch (error) { await loadSettings(); toast(error.message || "Could not change the AI provider."); } };
 document.querySelectorAll("[data-profile-field]").forEach((form) => {
   form.onsubmit = async (event) => {
     event.preventDefault();

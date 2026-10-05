@@ -21,7 +21,7 @@ function canTryNextModel(error) {
   );
 }
 
-class GeminiChat {
+class AiChat {
   constructor(config) {
     this.config = config;
     this.conversations = new Map();
@@ -49,6 +49,7 @@ class GeminiChat {
 
   async respond({
     apiKey,
+    provider = "gemini",
     scopeId,
     userId,
     text,
@@ -56,8 +57,9 @@ class GeminiChat {
     responseLimit,
   }) {
     if (!apiKey) {
-      const error = new Error("No Gemini API key is configured for this server");
+      const error = new Error(`No ${provider} API key is configured for this server`);
       error.code = "AI_NOT_CONFIGURED";
+      error.provider = provider;
       throw error;
     }
     const limit =
@@ -70,12 +72,30 @@ class GeminiChat {
       throw error;
     }
 
-    const conversationKey = scopeId + ":" + userId;
+    const conversationKey = provider + ":" + scopeId + ":" + userId;
     const previous = this.conversations.get(conversationKey) || [];
-    const conversation = [
-      ...previous,
-      { role: "user", parts: [{ text }] },
-    ];
+    const conversation = [...previous, { role: "user", text }];
+    if (provider === "openai") {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.config.openAiModel || "gpt-6-luna",
+          instructions: String(personality || "").trim() || fallbackPersonality,
+          input: conversation.map((message) => ({ role: message.role, content: message.text })),
+          max_output_tokens: 1200,
+          store: false,
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!response.ok) throw new Error(`OpenAI returned HTTP ${response.status}.`);
+      const result = await response.json();
+      const responseText = String(result.output_text || result.output?.flatMap((item) => item.content || []).filter((part) => part.type === "output_text").map((part) => part.text).join("") || "").trim();
+      if (!responseText) throw new Error("OpenAI returned an empty response.");
+      this.conversations.set(conversationKey, [...conversation, { role: "assistant", text: responseText }].slice(-maxConversationMessages));
+      return responseText;
+    }
+    const geminiConversation = conversation.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.text }] }));
     let response;
     let lastError;
     const models = this.config.geminiModels || [this.config.geminiModel];
@@ -83,7 +103,7 @@ class GeminiChat {
       try {
         response = await this.getClient(apiKey).models.generateContent({
           model,
-          contents: conversation,
+          contents: geminiConversation,
           config: {
             systemInstruction:
               String(personality || "").trim() || fallbackPersonality,
@@ -107,7 +127,7 @@ class GeminiChat {
     }
     this.conversations.set(
       conversationKey,
-      [...conversation, { role: "model", parts: [{ text: responseText }] }].slice(
+      [...conversation, { role: "assistant", text: responseText }].slice(
         -maxConversationMessages,
       ),
     );
@@ -115,4 +135,4 @@ class GeminiChat {
   }
 }
 
-module.exports = { GeminiChat };
+module.exports = { AiChat };

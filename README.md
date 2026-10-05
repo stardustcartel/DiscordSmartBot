@@ -1,6 +1,6 @@
 # Discord Smart Bot
 
-One shared Gemini-powered Discord bot that gives every server its own identity
+One shared Discord bot powered by each server's choice of Gemini or OpenAI, with its own identity
 and settings. A server manager can customize the bot's nickname, avatar,
 banner, bio, AI personality, knowledge channels, reminder time zone, and AI
 usage limit without creating a Discord bot application or supplying a bot token.
@@ -9,7 +9,7 @@ usage limit without creating a Discord bot application or supplying a bot token.
 
 The Discord bot application, its global username, and its global
 presence/status belong to the service operator. Each customer/server supplies
-and pays for its own Gemini API key.
+and pays for its own Gemini or OpenAI API key.
 
 Each server receives isolated settings and data:
 
@@ -18,7 +18,7 @@ Each server receives isolated settings and data:
 - Knowledge channels and knowledge-search results
 - Reminder time-zone default
 - Stored profile images and configuration
-- Encrypted customer Gemini API key
+- Encrypted customer Gemini or OpenAI API key (or both)
 
 The global bot status cannot differ by server because Discord presence belongs to
 the bot account. A fully custom status or global username requires a dedicated
@@ -48,7 +48,7 @@ bot needs the Change Nickname permission to set the server nickname.
 - /update role: generic role assignment for members with Manage Roles
 - /restart: restricted to service-owner Discord IDs in BOT_OWNER_IDS
 
-AI requests are available in servers only, because each Gemini key is tied to
+AI requests are available in servers only, because each provider key is tied to
 one server. Direct messages cannot be safely attributed to a customer's key.
 
 ## Oracle deployment
@@ -67,7 +67,7 @@ Generate the encryption key once:
 Put the printed value in GUILD_SECRETS_KEY in .env, alongside the shared
 Discord bot token, application ID, and your Discord user ID in BOT_OWNER_IDS.
 Keep .env private and back up GUILD_SECRETS_KEY: it is required to decrypt
-customer Gemini keys after a server migration or recovery.
+customer AI keys after a server migration or recovery.
 
 In the Discord Developer Portal, enable the Message Content privileged intent.
 Then generate the install link:
@@ -155,7 +155,9 @@ use these Cloudflare bindings and shared secrets:
     Cloudflare secret: BOT_SYNC_SECRET (same value as Oracle)
 
 Create the D1 database, bind it as `DB`, and run
-`migrations/0001_dashboard.sql`. Create an R2 bucket and bind it as
+`migrations/0001_dashboard.sql`. The OpenAI column is added automatically on
+existing D1 databases; `migrations/0003_openai.sql` is available for manual
+migration if needed. Create an R2 bucket and bind it as
 `BOT_ASSETS`. On Oracle, configure:
 
     DASHBOARD_SYNC_URL=https://discordsmartbot.pages.dev
@@ -165,6 +167,18 @@ Create the D1 database, bind it as `DB`, and run
 The bot bootstraps existing local settings into D1, keeps local JSON as an
 offline cache, sends Discord command changes to D1, and pulls dashboard changes
 back to the bot.
+
+## OpenAI integration
+
+In the dashboard's AI integration tab, a server manager can add and verify an
+OpenAI API key. It is encrypted with the same per-installation
+`GUILD_SECRETS_KEY` as Gemini keys, but stored separately. Replacing a key
+replaces only that provider's key and records who changed it. After saving a
+key, select OpenAI as the active provider and save that choice. Existing
+servers continue using Gemini until explicitly switched. OpenAI chat uses the
+Responses API with `OPENAI_MODEL` (default `gpt-6-luna`); OpenAI usage is
+billed to the key owner's OpenAI account. The Gemini model ladder applies only
+when Gemini is selected. There is no automatic fallback between providers.
 
 ## Gemini model fallback
 

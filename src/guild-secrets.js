@@ -54,7 +54,7 @@ class GuildSecretsStore {
         decipher.final(),
       ]).toString("utf8");
     } catch (error) {
-      console.error("Could not decrypt a guild Gemini key:", error.message);
+      console.error("Could not decrypt a guild AI key:", error.message);
       return "";
     }
   }
@@ -66,6 +66,11 @@ class GuildSecretsStore {
   getGeminiKey(guildId) {
     return this.decrypt(this.data.guilds[guildId]?.geminiApiKey);
   }
+
+  hasOpenAiKey(guildId) { return Boolean(this.getOpenAiKey(guildId)); }
+  getOpenAiKey(guildId) { return this.decrypt(this.data.guilds[guildId]?.openaiApiKey); }
+  getOpenAiKeyHistory(guildId) { return this.data.guilds[guildId]?.openaiApiKey?.keyHistory || null; }
+  getEncryptedOpenAiKey(guildId) { return this.data.guilds[guildId]?.openaiApiKey || null; }
 
   getGeminiKeyHistory(guildId) {
     return this.data.guilds[guildId]?.geminiApiKey?.keyHistory || null;
@@ -109,6 +114,12 @@ class GuildSecretsStore {
 
   getEncryptedGeminiKey(guildId) {
     return this.data.guilds[guildId]?.geminiApiKey || null;
+  }
+
+  replaceEncryptedOpenAiFromSync(guildId, payload) {
+    if (!payload) return;
+    this.data.guilds[guildId] = { ...this.data.guilds[guildId], openaiApiKey: payload, updatedAt: new Date().toISOString() };
+    writeJson(this.filePath, { version: 1, updatedAt: new Date().toISOString(), guilds: this.data.guilds });
   }
 
   replaceEncryptedFromSync(guildId, payload) {

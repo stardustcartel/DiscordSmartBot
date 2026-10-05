@@ -40,12 +40,14 @@ export async function onRequestPost({ env, request }) {
   for (const snapshot of Array.isArray(body.bootstrap) ? body.bootstrap : []) {
     if (!installedIds.includes(String(snapshot.guildId))) continue;
     const current = await getState(env.DB, String(snapshot.guildId));
-    if (!current || current.updatedBy === "bootstrap") await writeState(env.DB, String(snapshot.guildId), await storeAssets(env, snapshot, current?.settings), snapshot.geminiSecret, "oracle-bootstrap");
+    if (!current || current.updatedBy === "bootstrap") await writeState(env.DB, String(snapshot.guildId), await storeAssets(env, snapshot, current?.settings), snapshot.geminiSecret, snapshot.openaiSecret ?? current?.openaiSecret, "oracle-bootstrap");
   }
   for (const change of Array.isArray(body.changes) ? body.changes : []) {
     if (!installedIds.includes(String(change.guildId))) continue;
     const current = await getState(env.DB, String(change.guildId));
-    await writeState(env.DB, String(change.guildId), await storeAssets(env, change, current?.settings), change.geminiSecret, "oracle");
+    const settings = await storeAssets(env, change, current?.settings);
+    if (settings.aiProvider === undefined && current?.settings?.aiProvider) settings.aiProvider = current.settings.aiProvider;
+    await writeState(env.DB, String(change.guildId), settings, change.geminiSecret, change.openaiSecret ?? current?.openaiSecret, "oracle");
   }
   const knownVersions = body.knownVersions && typeof body.knownVersions === "object" ? body.knownVersions : {};
   const states = (await statesForGuilds(env.DB, installedIds)).filter((state) => state.version > Number(knownVersions[state.guildId] || 0));

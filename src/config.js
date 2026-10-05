@@ -48,6 +48,7 @@ const config = {
   botOwnerIds: parseIdList(process.env.BOT_OWNER_IDS),
   guildSecretsKey: process.env.GUILD_SECRETS_KEY || "",
   geminiModel: defaultGeminiModel,
+  openAiModel: process.env.OPENAI_MODEL || "gpt-6-luna",
   geminiModels: parseModelList(process.env.GEMINI_MODEL_LADDER, [
     defaultGeminiModel,
     "gemini-3.7-flash",

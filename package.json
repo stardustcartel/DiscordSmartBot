@@ -2,14 +2,16 @@
   "name": "discord-smart-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "A shared Gemini-powered Discord bot with isolated per-server settings",
+  "description": "A shared Discord bot with per-server Gemini or OpenAI settings",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/guild-secrets.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/youtube.js && node --check src/dashboard.js && node --check src/dashboard-sync.js && node --check src/ai.js && node --check scripts/print-invite-url.js && node --check scripts/generate-secrets-key.js && node --check scripts/set-guild-gemini-key.js && node --check scripts/check-gemini-key-history.js && node --check functions/_lib/authorize.js && node --check functions/_lib/db.js && node --check functions/api/me.js && node --check functions/auth/invite.js && node --check functions/auth/callback.js && node --check functions/auth/logout.js && node --check functions/api/guild/[guildId]/youtube.js && node --check functions/api/guild/[guildId]/permissions.js && node --check functions/api/guild/[guildId]/bot-access.js && node --check functions/api/guild/[guildId]/gemini.js && node --check functions/api/guild/[guildId]/settings.js && node --check dashboard/app.js",
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/guild-secrets.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/youtube.js && node --check src/dashboard.js && node --check src/dashboard-sync.js && node --check src/ai.js && node --check scripts/print-invite-url.js && node --check scripts/generate-secrets-key.js && node --check scripts/set-guild-gemini-key.js && node --check scripts/check-gemini-key-history.js && node --check scripts/check-ai-providers.js && node --check functions/_lib/authorize.js && node --check functions/_lib/db.js && node --check functions/api/me.js && node --check functions/auth/invite.js && node --check functions/auth/callback.js && node --check functions/auth/logout.js && node --check functions/api/guild/[guildId]/youtube.js && node --check functions/api/guild/[guildId]/permissions.js && node --check functions/api/guild/[guildId]/bot-access.js && node --check functions/api/guild/[guildId]/gemini.js && node --check functions/api/guild/[guildId]/openai.js && node --check functions/api/guild/[guildId]/ai-provider.js && node --check functions/api/guild/[guildId]/settings.js && node --check dashboard/app.js",
     "check:dashboard-auth": "node --no-warnings scripts/check-dashboard-auth.mjs",
     "check:dashboard-youtube": "node --no-warnings scripts/check-dashboard-youtube.mjs",
     "check:gemini-key-history": "node scripts/check-gemini-key-history.js",
+    "check:ai-providers": "node scripts/check-ai-providers.js",
+    "check:openai-dashboard": "node --no-warnings scripts/check-openai-dashboard.mjs",
     "invite": "node scripts/print-invite-url.js",
     "generate:secrets-key": "node scripts/generate-secrets-key.js",
     "set:gemini-key": "node scripts/set-guild-gemini-key.js"

@@ -91,6 +91,8 @@
 
   #youtube-form > button,
   #gemini-form > button,
+  #openai-form > button,
+  #provider-form > button,
   #personality-form > button,
   .profile-field-form > button {
     color: #fff;

@@ -20,6 +20,7 @@ class FakeD1 {
       guild_id: guildId,
       settings_json: JSON.stringify(settings),
       gemini_secret_json: null,
+      openai_secret_json: JSON.stringify({ ciphertext: "encrypted-openai-key" }),
       version: 1,
       updated_at: Date.now(),
       updated_by: "test",
@@ -31,14 +32,16 @@ class FakeD1 {
     return {
       args: [],
       bind(...args) { this.args = args; return this; },
+      async all() { return sql.startsWith("PRAGMA table_info") ? { results: [{ name: "openai_secret_json" }] } : { results: [] }; },
       async first() { return sql.startsWith("SELECT guild_id") ? { ...database.row } : null; },
       async run() {
         if (sql.startsWith("INSERT INTO guild_state")) {
-          const [rowGuildId, settingsJson, geminiJson, updatedAt, updatedBy] = this.args;
+          const [rowGuildId, settingsJson, geminiJson, openaiJson, updatedAt, updatedBy] = this.args;
           database.row = {
             guild_id: rowGuildId,
             settings_json: settingsJson,
             gemini_secret_json: geminiJson,
+            openai_secret_json: openaiJson,
             version: database.row.version + 1,
             updated_at: updatedAt,
             updated_by: updatedBy,
@@ -92,6 +95,9 @@ if (!updateResponse.ok) throw new Error(`Announcement update failed with ${updat
 let subscriptions = JSON.parse(env.DB.row.settings_json).youtubeSubscriptions;
 if (subscriptions[0].announcementTemplate !== "Updated {title}" || subscriptions[1].announcementTemplate !== "Other message") {
   throw new Error("Announcement editing changed the wrong notification.");
+}
+if (JSON.parse(env.DB.row.openai_secret_json).ciphertext !== "encrypted-openai-key") {
+  throw new Error("Editing an unrelated setting removed the OpenAI key.");
 }
 
 const deleteResponse = await onRequestDelete({

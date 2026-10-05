@@ -15,7 +15,7 @@ const {
   TextInputStyle,
 } = require("discord.js");
 const { config } = require("./config");
-const { GeminiChat } = require("./ai");
+const { AiChat } = require("./ai");
 const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
 const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
@@ -41,7 +41,7 @@ const client = new Client({
 
 const guildSettings = new GuildSettingsStore(config);
 const guildSecrets = new GuildSecretsStore(config);
-const ai = new GeminiChat(config);
+const ai = new AiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
 const reminders = new ReminderStore({
   ...config,
@@ -331,12 +331,12 @@ function isBotOwner(userId) {
 
 function aiErrorMessage(error) {
   if (error.code === "AI_NOT_CONFIGURED") {
-    return "This server does not have a Gemini API key configured yet. A server manager can add one with /setup api-key.";
+    return error.provider === "openai" ? "This server does not have an OpenAI API key configured yet. A server manager can add one in the dashboard." : "This server does not have a Gemini API key configured yet. A server manager can add one with /setup api-key.";
   }
   if (error.code === "AI_RATE_LIMITED") {
     return "This server has reached its configured AI response limit for the hour.";
   }
-  return "I could not reach Gemini right now. Please try again later.";
+  return "I could not reach the selected AI provider right now. Please try again later.";
 }
 
 function getSettingsForGuild(guildId) {
@@ -362,8 +362,10 @@ function canUseBotInGuild({ guildId, channelId, member }) {
 
 async function requestAiResponse({ guildId, userId, text }) {
   const settings = getSettingsForGuild(guildId);
+  const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
   return ai.respond({
-    apiKey: guildId ? guildSecrets.getGeminiKey(guildId) : "",
+    apiKey: guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "",
+    provider,
     scopeId: guildId || "direct-messages",
     userId,
     text,
@@ -387,7 +389,7 @@ async function handleChatInteraction(interaction) {
     });
     const chunks = splitMessage(response);
     await interaction.editReply({
-      content: chunks.shift() || "Gemini returned an empty response.",
+      content: chunks.shift() || "The AI provider returned an empty response.",
       allowedMentions: { parse: [] },
     });
     for (const chunk of chunks) {

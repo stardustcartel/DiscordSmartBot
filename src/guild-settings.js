@@ -97,6 +97,7 @@ class GuildSettingsStore {
         bannerPath: "",
       },
       personality: this.defaultPersonality,
+      aiProvider: "gemini",
       knowledgeChannelIds: [],
       botResponseChannelIds: [],
       botAccessRoleIds: [],
@@ -123,6 +124,7 @@ class GuildSettingsStore {
       },
       personality:
         cleanText(value?.personality, 12_000) || defaults.personality,
+      aiProvider: value?.aiProvider === "openai" ? "openai" : "gemini",
       knowledgeChannelIds: cleanChannelIds(value?.knowledgeChannelIds),
       botResponseChannelIds: cleanChannelIds(value?.botResponseChannelIds),
       botAccessRoleIds: cleanChannelIds(value?.botAccessRoleIds),
