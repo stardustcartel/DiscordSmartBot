@@ -783,7 +783,10 @@ async function handleSetupGeminiKeyModal(interaction) {
     return;
   }
   const apiKey = interaction.fields.getTextInputValue("gemini-api-key");
-  guildSecrets.setGeminiKey(interaction.guildId, apiKey);
+  guildSecrets.setGeminiKey(interaction.guildId, apiKey, {
+    id: interaction.user.id,
+    name: interaction.user.globalName || interaction.user.username,
+  });
   await interaction.reply({
     content: "Gemini API key saved for this server. The key is encrypted and will not be shown again.",
     ephemeral: true,

@@ -111,17 +111,18 @@ function createDashboard({ client, config, guildSettings, guildSecrets }) {
     }
     const guildId = parts[2];
     if (!guildId) return send(response, 404, { error: "Not found" });
-    try { requireGuild(request, guildId); } catch { return send(response, 401, { error: "Sign in with Discord and choose a server you manage." }); }
+    let session;
+    try { session = requireGuild(request, guildId); } catch { return send(response, 401, { error: "Sign in with Discord and choose a server you manage." }); }
     const guild = client.guilds.cache.get(guildId);
     if (!guild) return send(response, 404, { error: "The bot is not installed in that server." });
-    if (request.method === "GET" && parts[3] === "settings") return send(response, 200, { settings: publicSettings(guildSettings.get(guildId)), hasGeminiKey: guildSecrets.hasGeminiKey(guildId), channels: [...guild.channels.cache.values()].filter((channel) => channel.isTextBased()).map((channel) => ({ id: channel.id, name: channel.name })) });
+    if (request.method === "GET" && parts[3] === "settings") return send(response, 200, { settings: publicSettings(guildSettings.get(guildId)), hasGeminiKey: guildSecrets.hasGeminiKey(guildId), geminiKeyHistory: guildSecrets.getGeminiKeyHistory(guildId), channels: [...guild.channels.cache.values()].filter((channel) => channel.isTextBased()).map((channel) => ({ id: channel.id, name: channel.name })) });
     const body = await readJson(request);
     if (request.method === "PUT" && parts[3] === "personality") {
       guildSettings.setPersonality(guildId, String(body.personality || "").trim());
       return send(response, 200, { ok: true });
     }
     if (request.method === "PUT" && parts[3] === "gemini") {
-      guildSecrets.setGeminiKey(guildId, String(body.apiKey || "").trim());
+      guildSecrets.setGeminiKey(guildId, String(body.apiKey || "").trim(), { id: session.user.id, name: session.user.global_name || session.user.username });
       return send(response, 200, { ok: true });
     }
     if (request.method === "PUT" && parts[3] === "profile") {

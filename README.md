@@ -171,5 +171,9 @@ back to the bot.
 `GEMINI_MODEL_LADDER` is an optional comma-separated list of Gemini model IDs.
 For each response, the bot tries the models in order and moves to the next one
 when Gemini reports quota, model-availability, or temporary service errors.
+The default order is `gemini-3.8-flash`, `gemini-3.7-flash`,
+`gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, and
+`gemini-3.1-flash-lite`. An existing `GEMINI_MODEL_LADDER` in the Oracle
+`.env` overrides this default and must be updated separately.
 Each customer key must have access to the configured models. A project-level
 permission denial is reported as an error and is not bypassed by the ladder.

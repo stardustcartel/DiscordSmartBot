@@ -53,7 +53,7 @@ export async function onRequestGet({ env, request, params }) {
   settings.profile.avatarUrls = [...new Set([settings.profile.avatarUrl, discordAvatarUrl, storedAvatarUrl].filter(Boolean))];
   settings.profile.bannerUrls = [...new Set([settings.profile.bannerUrl, discordBannerUrl, storedBannerUrl].filter(Boolean))];
   return json(
-    { settings, hasGeminiKey: Boolean(state.geminiSecret), channels, roles, version: state.version },
+    { settings, hasGeminiKey: Boolean(state.geminiSecret), geminiKeyHistory: state.geminiSecret?.keyHistory || null, channels, roles, version: state.version },
     200,
     { "Cache-Control": "no-store" },
   );

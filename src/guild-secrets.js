@@ -67,7 +67,11 @@ class GuildSecretsStore {
     return this.decrypt(this.data.guilds[guildId]?.geminiApiKey);
   }
 
-  setGeminiKey(guildId, apiKey) {
+  getGeminiKeyHistory(guildId) {
+    return this.data.guilds[guildId]?.geminiApiKey?.keyHistory || null;
+  }
+
+  setGeminiKey(guildId, apiKey, actor = {}) {
     const cleanedKey = String(apiKey || "").trim();
     if (!/^\d{15,25}$/.test(guildId)) {
       throw new Error("Guild ID must be a Discord snowflake.");
@@ -75,9 +79,20 @@ class GuildSecretsStore {
     if (!cleanedKey) {
       throw new Error("Gemini API key cannot be empty.");
     }
+    const previousPayload = this.data.guilds[guildId]?.geminiApiKey;
+    const keyHistory = {
+      current: {
+        at: new Date().toISOString(),
+        byId: String(actor.id || "").trim() || null,
+        byName: String(actor.name || "Bot operator").trim().slice(0, 100),
+      },
+      previous: previousPayload
+        ? previousPayload.keyHistory?.current || { at: null, byId: null, byName: null }
+        : null,
+    };
     this.data.guilds[guildId] = {
       ...this.data.guilds[guildId],
-      geminiApiKey: this.encrypt(cleanedKey),
+      geminiApiKey: { ...this.encrypt(cleanedKey), keyHistory },
       updatedAt: new Date().toISOString(),
     };
     writeJson(this.filePath, {

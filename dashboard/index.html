@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20260912"><link rel="stylesheet" href="/mobile.css?v=20260912"></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20261005"><link rel="stylesheet" href="/mobile.css?v=20260912"></head><body>
 <header class="topbar"><a class="brand" href="/"><span class="brand-mark">✦</span><span>TheSmartBot</span></a><div class="top-actions"><span id="account" hidden></span><button id="login">Sign in with Discord</button><button id="logout" hidden>Sign out</button></div></header>
 <main>
 <section id="setup-notice" class="notice" hidden></section>
@@ -69,7 +69,7 @@
       </form>
     </section>
   </section>
-  <section class="panel" id="gemini"><div class="panel-heading"><p class="eyebrow">GEMINI INTEGRATION</p><h2>Bring the Smart Bot to life with Gemini.</h2><p class="hint">The key belongs to this server and is encrypted before storage.</p></div><p id="key-status" class="callout"></p><form id="gemini-form"><label>Gemini API key<input name="apiKey" type="password" autocomplete="off" placeholder="Paste a new or replacement key" required></label><button>Save encrypted key</button></form><p class="fine-print">Gemini has a free tier. TheSmartBot rotates between supported free-tier models when one reaches its limit, helping keep your bot running smart. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Get a free key in Google AI Studio →</a></p></section>
+  <section class="panel" id="gemini"><div class="panel-heading"><p class="eyebrow">GEMINI INTEGRATION</p><h2>Bring the Smart Bot to life with Gemini.</h2><p class="hint">The key belongs to this server and is encrypted before storage.</p></div><div id="key-status" class="callout"><div id="key-status-main"></div><div id="key-status-history" class="key-status-history" hidden><div id="key-current-history"></div><div id="key-previous-history"></div></div></div><form id="gemini-form"><label>Gemini API key<input name="apiKey" type="password" autocomplete="off" placeholder="Paste a new or replacement key" required></label><button>Save encrypted key</button></form><p class="fine-print">Gemini has a free tier. TheSmartBot rotates between supported free-tier models when one reaches its limit, helping keep your bot running smart. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Get a free key in Google AI Studio →</a></p></section>
   </section></div>
 </section>
 </main>
@@ -82,4 +82,4 @@
     <div class="announcement-dialog-actions"><button type="button" id="announcement-close" class="button">Close</button><button type="submit" id="announcement-save" class="button" hidden>Save and close</button></div>
   </form>
 </div>
-<p id="toast" role="status"></p><script src="/app.js?v=20260930"></script></body></html>
+<p id="toast" role="status"></p><script src="/app.js?v=20261005"></script></body></html>

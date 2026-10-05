@@ -234,6 +234,23 @@ async function load() {
     renderServers(me.guilds);
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
 }
+function formatGeminiKeyEvent(event) {
+  if (!event?.at) return "Date and person unavailable (saved before tracking).";
+  const date = new Date(event.at);
+  const dateText = Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return `${dateText} by ${event.byName || "unknown member"}`;
+}
+
+function renderGeminiKeyStatus(data) {
+  $("#key-status-main").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
+  $("#key-status-history").hidden = !data.hasGeminiKey;
+  if (!data.hasGeminiKey) return;
+  $("#key-current-history").textContent = `Current key: ${formatGeminiKeyEvent(data.geminiKeyHistory?.current)}`;
+  $("#key-previous-history").textContent = data.geminiKeyHistory?.previous
+    ? `Previous key: ${formatGeminiKeyEvent(data.geminiKeyHistory.previous)}`
+    : "Previous key: No replacement details recorded.";
+}
+
 async function loadSettings() {
   const guildId = selected;
   const data = await api(`/api/guild/${guildId}/settings`);
@@ -242,7 +259,7 @@ async function loadSettings() {
   $("#personality-form [name=personality]").value = settings.personality || "";
   $("#profile-editor [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-editor [name=bio]").value = settings.profile?.bio || "";
   renderProfilePreview(settings.profile, data.version);
-  $("#key-status").textContent = data.hasGeminiKey ? "A Gemini key is configured for this server." : "No Gemini key is configured yet.";
+  renderGeminiKeyStatus(data);
   setPersonalityLock(!data.hasGeminiKey);
   renderDestinationChannels(data.channels || []);
   renderBotAccessControls(data.channels || [], data.roles || []);
@@ -367,7 +384,7 @@ $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
-$("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); toast(result.message || "Gemini key verified and saved."); loadSettings(); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
+$("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 document.querySelectorAll("[data-profile-field]").forEach((form) => {
   form.onsubmit = async (event) => {
     event.preventDefault();

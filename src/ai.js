@@ -24,16 +24,12 @@ function canTryNextModel(error) {
 class GeminiChat {
   constructor(config) {
     this.config = config;
-    this.clients = new Map();
     this.conversations = new Map();
     this.usage = new Map();
   }
 
   getClient(apiKey) {
-    if (!this.clients.has(apiKey)) {
-      this.clients.set(apiKey, new GoogleGenAI({ apiKey }));
-    }
-    return this.clients.get(apiKey);
+    return new GoogleGenAI({ apiKey });
   }
 
   reserveResponse(scopeId, userId, responseLimit) {

@@ -39,7 +39,7 @@ function parseModelList(value, fallback) {
   return [...new Set(models.length > 0 ? models : fallback)];
 }
 
-const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
 const config = {
   projectRoot,
@@ -50,6 +50,8 @@ const config = {
   geminiModel: defaultGeminiModel,
   geminiModels: parseModelList(process.env.GEMINI_MODEL_LADDER, [
     defaultGeminiModel,
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
