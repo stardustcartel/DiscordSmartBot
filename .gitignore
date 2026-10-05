@@ -9,3 +9,9 @@ logs/
 *.pem
 *.pub
 *.token
+/bouncer-lechonk-actions
+/discord-smart-bot-oracle
+/discord-smart-bot-oracle-new
+/known_hosts
+/known_hosts.old
+/consolestuff.txt
