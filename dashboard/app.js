@@ -84,6 +84,8 @@ function setupMobileNavigationHint() {
 }
 
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
+function closeAiProviderMenu() { $("#ai-provider-options").hidden = true; $("#ai-provider-trigger").setAttribute("aria-expanded", "false"); $("#ai-provider-trigger").classList.remove("open"); }
+function selectAiProvider(provider) { const value = provider === "openai" ? "openai" : "gemini"; $("#ai-provider").value = value; $("#ai-provider-label").textContent = value === "openai" ? "OpenAI" : "Gemini"; document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.provider === value))); closeAiProviderMenu(); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
 let botAccessChannels = [];
 let botAccessRoles = [];
@@ -271,7 +273,7 @@ async function loadSettings() {
   renderProfilePreview(settings.profile, data.version);
   renderGeminiKeyStatus(data);
   renderOpenAiKeyStatus(data);
-  $("#ai-provider").value = settings.aiProvider === "openai" ? "openai" : "gemini";
+  selectAiProvider(settings.aiProvider);
   setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels(data.channels || []);
   renderBotAccessControls(data.channels || [], data.roles || []);
@@ -481,10 +483,12 @@ $("#announcement-modal-form").onsubmit = async (event) => {
   }
 };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
+$("#ai-provider-trigger").onclick = () => { const list = $("#ai-provider-options"); const opening = list.hidden; list.hidden = !opening; $("#ai-provider-trigger").setAttribute("aria-expanded", String(opening)); $("#ai-provider-trigger").classList.toggle("open", opening); };
+document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => { option.onclick = () => { selectAiProvider(option.dataset.provider); $("#ai-provider-trigger").focus(); }; });
 $("#bot-channel-trigger").onclick = () => toggleBotAccessMenu("channels");
 $("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
-document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
+document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 load();
