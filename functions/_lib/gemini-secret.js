@@ -13,3 +13,17 @@ export async function encryptGuildKey(apiKey, encodedKey) {
 }
 
 export const encryptGeminiKey = encryptGuildKey;
+
+export async function decryptGuildKey(secret, encodedKey) {
+  if (!secret?.iv || !secret?.tag || !secret?.ciphertext) return "";
+  const keyBytes = base64ToBytes(String(encodedKey || "").trim());
+  if (keyBytes.length !== 32) throw new Error("GUILD_SECRETS_KEY must contain a base64-encoded 32-byte key.");
+  const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
+  const ciphertext = base64ToBytes(secret.ciphertext);
+  const tag = base64ToBytes(secret.tag);
+  const combined = new Uint8Array(ciphertext.length + tag.length);
+  combined.set(ciphertext);
+  combined.set(tag, ciphertext.length);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64ToBytes(secret.iv), tagLength: 128 }, key, combined);
+  return new TextDecoder().decode(plaintext);
+}

@@ -36,6 +36,9 @@ async function main() {
   assert.equal(reloaded.getOpenAiKeyHistory(guildId).current.byName, "Owner");
   settings.setLimits(guildId, { aiProvider: "openai" });
   assert.equal(new GuildSettingsStore(config).get(guildId).aiProvider, "openai");
+  assert.equal(settings.get(guildId).openAiModel, "gpt-6-luna");
+  settings.update(guildId, (current) => ({ ...current, openAiModel: "gpt-6-astra" }));
+  assert.equal(new GuildSettingsStore(config).get(guildId).openAiModel, "gpt-6-astra");
 
   const requests = [];
   globalThis.fetch = async (url, options) => {
@@ -53,6 +56,11 @@ async function main() {
   await ai.respond({ ...args, text: "Again" });
   assert.deepEqual(requests[1].body.input.map((entry) => entry.role), ["user", "assistant", "user"]);
   assert.ok(!JSON.stringify(requests[1].body).includes("gemini-test-key"));
+  await ai.respond({ ...args, model: "gpt-6-astra", text: "Try Astra" });
+  assert.equal(requests[2].body.model, "gpt-6-astra");
+  assert.equal(requests[2].body.reasoning.effort, "low");
+  await ai.respond({ ...args, model: "gpt-5.5-pro", text: "Try Pro" });
+  assert.equal(requests[3].body.reasoning.effort, "high");
   console.log("AI provider storage and OpenAI chat checks passed.");
 }
 

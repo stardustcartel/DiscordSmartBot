@@ -85,8 +85,20 @@ function setupMobileNavigationHint() {
 
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function closeAiProviderMenu() { $("#ai-provider-options").hidden = true; $("#ai-provider-trigger").setAttribute("aria-expanded", "false"); $("#ai-provider-trigger").classList.remove("open"); }
+function closeOpenAiModelMenu() { $("#openai-model-options").hidden = true; $("#openai-model-trigger").setAttribute("aria-expanded", "false"); $("#openai-model-trigger").classList.remove("open"); }
+function selectOpenAiModel(model) { $("#openai-model").value = model; $("#openai-model-label").textContent = model; document.querySelectorAll("#openai-model-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.model === model))); closeOpenAiModelMenu(); }
+async function loadOpenAiModels(guildId, currentModel) {
+  const list = $("#openai-model-options");
+  let models;
+  try { ({ models } = await api(`/api/guild/${guildId}/openai-model`)); }
+  catch { models = [currentModel || "gpt-6-luna"]; }
+  if (guildId !== selected) return;
+  if (!models.includes(currentModel)) models = [currentModel, ...models];
+  list.replaceChildren(...models.map((model) => { const option = document.createElement("button"); option.type = "button"; option.className = "select-option"; option.setAttribute("role", "option"); option.dataset.model = model; option.textContent = model; option.onclick = () => selectOpenAiModel(model); return option; }));
+  selectOpenAiModel(currentModel || "gpt-6-luna");
+}
 function selectAiProvider(provider) { const value = provider === "openai" ? "openai" : "gemini"; $("#ai-provider").value = value; $("#ai-provider-label").textContent = value === "openai" ? "OpenAI" : "Gemini"; document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.provider === value))); closeAiProviderMenu(); }
-function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
+function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text or announcement channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}${channel.type === 5 ? " · Announcement" : ""}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
 let botAccessChannels = [];
 let botAccessRoles = [];
 let botAccessSelections = { channels: new Set(), roles: new Set() };
@@ -274,9 +286,10 @@ async function loadSettings() {
   renderGeminiKeyStatus(data);
   renderOpenAiKeyStatus(data);
   selectAiProvider(settings.aiProvider);
+  loadOpenAiModels(guildId, settings.openAiModel || "gpt-6-luna");
   setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels(data.channels || []);
-  renderBotAccessControls(data.channels || [], data.roles || []);
+  renderBotAccessControls((data.channels || []).filter((channel) => channel.type === 0), data.roles || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
@@ -400,6 +413,7 @@ document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = 
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 $("#openai-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); await loadSettings(); toast(result.message || "OpenAI key verified and saved."); } catch (error) { toast(error.message || "That OpenAI key could not be verified."); } };
+$("#openai-model-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai-model`, { method: "PUT", body: JSON.stringify({ model: $("#openai-model").value }) }); await loadSettings(); toast(result.message || "OpenAI model updated."); } catch (error) { toast(error.message || "Could not change the OpenAI model."); } };
 $("#provider-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/ai-provider`, { method: "PUT", body: JSON.stringify({ provider: $("#ai-provider").value }) }); await loadSettings(); toast(result.message || "AI provider updated."); } catch (error) { await loadSettings(); toast(error.message || "Could not change the AI provider."); } };
 document.querySelectorAll("[data-profile-field]").forEach((form) => {
   form.onsubmit = async (event) => {
@@ -484,11 +498,12 @@ $("#announcement-modal-form").onsubmit = async (event) => {
 };
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
 $("#ai-provider-trigger").onclick = () => { const list = $("#ai-provider-options"); const opening = list.hidden; list.hidden = !opening; $("#ai-provider-trigger").setAttribute("aria-expanded", String(opening)); $("#ai-provider-trigger").classList.toggle("open", opening); };
+$("#openai-model-trigger").onclick = () => { const list = $("#openai-model-options"); const opening = list.hidden; list.hidden = !opening; $("#openai-model-trigger").setAttribute("aria-expanded", String(opening)); $("#openai-model-trigger").classList.toggle("open", opening); };
 document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => { option.onclick = () => { selectAiProvider(option.dataset.provider); $("#ai-provider-trigger").focus(); }; });
 $("#bot-channel-trigger").onclick = () => toggleBotAccessMenu("channels");
 $("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
-document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
+document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest("#openai-model-select")) closeOpenAiModelMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 load();

@@ -366,6 +366,7 @@ async function requestAiResponse({ guildId, userId, text }) {
   return ai.respond({
     apiKey: guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "",
     provider,
+    model: settings.openAiModel,
     scopeId: guildId || "direct-messages",
     userId,
     text,

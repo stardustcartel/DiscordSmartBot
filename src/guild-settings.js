@@ -98,6 +98,7 @@ class GuildSettingsStore {
       },
       personality: this.defaultPersonality,
       aiProvider: "gemini",
+      openAiModel: this.config.openAiModel || "gpt-6-luna",
       knowledgeChannelIds: [],
       botResponseChannelIds: [],
       botAccessRoleIds: [],
@@ -125,6 +126,7 @@ class GuildSettingsStore {
       personality:
         cleanText(value?.personality, 12_000) || defaults.personality,
       aiProvider: value?.aiProvider === "openai" ? "openai" : "gemini",
+      openAiModel: /^gpt-[a-z0-9.-]{1,40}$/.test(value?.openAiModel || "") ? value.openAiModel : defaults.openAiModel,
       knowledgeChannelIds: cleanChannelIds(value?.knowledgeChannelIds),
       botResponseChannelIds: cleanChannelIds(value?.botResponseChannelIds),
       botAccessRoleIds: cleanChannelIds(value?.botAccessRoleIds),

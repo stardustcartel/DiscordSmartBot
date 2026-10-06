@@ -2,6 +2,7 @@ const defaultSettings = {
   profile: { nickname: "", bio: "", avatarPath: "", bannerPath: "", avatarKey: "", bannerKey: "" },
   personality: "You are a helpful, friendly Discord assistant.",
   aiProvider: "gemini",
+  openAiModel: "gpt-6-luna",
   knowledgeChannelIds: [],
   botResponseChannelIds: [],
   botAccessRoleIds: [],

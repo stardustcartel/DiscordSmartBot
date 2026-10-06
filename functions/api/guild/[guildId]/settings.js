@@ -18,7 +18,7 @@ export async function onRequestGet({ env, request, params }) {
     fetch("https://discord.com/api/users/@me", { headers: discordHeaders }),
   ]);
   if (!channelResponse.ok) return json({ error: "The bot could not load this server's channels." }, 502);
-  const channels = (await channelResponse.json()).filter((channel) => channel.type === 0).map((channel) => ({ id: channel.id, name: channel.name }));
+  const channels = (await channelResponse.json()).filter((channel) => channel.type === 0 || channel.type === 5).map((channel) => ({ id: channel.id, name: channel.name, type: channel.type }));
   const roles = roleResponse.ok
     ? (await roleResponse.json()).filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => ({ id: role.id, name: role.name, color: role.color }))
     : [];

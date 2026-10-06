@@ -50,6 +50,7 @@ class AiChat {
   async respond({
     apiKey,
     provider = "gemini",
+    model,
     scopeId,
     userId,
     text,
@@ -76,18 +77,21 @@ class AiChat {
     const previous = this.conversations.get(conversationKey) || [];
     const conversation = [...previous, { role: "user", text }];
     if (provider === "openai") {
+      const selectedModel = model || this.config.openAiModel || "gpt-6-luna";
+      const supportsNoReasoning = /^(gpt-5\.5|gpt-5\.4-mini|gpt-6-luna|gpt-6-sol|gpt-5\.6-(?:sol|terra|luna))$/.test(selectedModel);
+      const reasoningEffort = selectedModel === "gpt-5.5-pro" ? "high" : supportsNoReasoning ? "none" : "low";
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: this.config.openAiModel || "gpt-6-luna",
+          model: selectedModel,
           instructions: String(personality || "").trim() || fallbackPersonality,
           input: conversation.map((message) => ({ role: message.role, content: message.text })),
-          reasoning: { effort: "none" },
-          max_output_tokens: 1200,
+          reasoning: { effort: reasoningEffort },
+          max_output_tokens: selectedModel === "gpt-5.5-pro" ? 4000 : 1200,
           store: false,
         }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(selectedModel === "gpt-5.5-pro" ? 180000 : 45000),
       });
       if (!response.ok) throw new Error(`OpenAI returned HTTP ${response.status}.`);
       const result = await response.json();

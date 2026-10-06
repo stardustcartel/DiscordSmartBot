@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { onRequestPut as saveOpenAiKey } from "../functions/api/guild/[guildId]/openai.js";
 import { onRequestPut as selectProvider } from "../functions/api/guild/[guildId]/ai-provider.js";
+import { onRequestGet as listModels, onRequestPut as saveModel } from "../functions/api/guild/[guildId]/openai-model.js";
 import { seal } from "../functions/_lib/auth.js";
 
 const guildId = "1545533279766319215";
@@ -49,7 +50,7 @@ globalThis.fetch = async (input, options = {}) => {
   if (url.endsWith(`/guilds/${guildId}`)) return Response.json({ owner_id: managerId });
   if (url.endsWith(`/guilds/${guildId}/roles`)) return Response.json([{ id: guildId, permissions: "0" }]);
   if (url.endsWith(`/guilds/${guildId}/members/${managerId}`)) return Response.json({ user: { id: managerId }, roles: [] });
-  if (url === "https://api.openai.com/v1/models") return new Response("{}", { status: options.headers.Authorization === "Bearer invalid-key" ? 401 : 200 });
+  if (url === "https://api.openai.com/v1/models") return Response.json({ data: [{ id: "gpt-6.2-luna" }, { id: "gpt-image-2" }, { id: "gpt-6-luna-2026-05-18" }] }, { status: options.headers.Authorization === "Bearer invalid-key" ? 401 : 200 });
   throw new Error(`Unexpected request: ${url}`);
 };
 
@@ -73,6 +74,15 @@ try {
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(env.DB.row.settings_json).aiProvider, "openai");
   assert.equal(JSON.parse(env.DB.row.openai_secret_json).ciphertext, second.ciphertext, "Provider switch must preserve key");
+  const modelList = await listModels({ env, params: { guildId }, request: requestFor("openai-model", {}) });
+  const models = (await modelList.json()).models;
+  assert.ok(models.includes("gpt-5.5-pro") && models.includes("gpt-6.2-luna"));
+  assert.ok(!models.includes("gpt-image-2") && !models.includes("gpt-6-luna-2026-05-18"));
+  response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-image-2" }) });
+  assert.equal(response.status, 400);
+  response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-6.2-luna" }) });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(env.DB.row.settings_json).openAiModel, "gpt-6.2-luna");
   console.log("OpenAI dashboard encryption, key history, and provider selection checks passed.");
 } finally {
   globalThis.fetch = originalFetch;
