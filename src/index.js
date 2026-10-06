@@ -345,11 +345,11 @@ function getSettingsForGuild(guildId) {
     : guildSettings.getDirectMessageSettings();
 }
 
-function canUseBotInGuild({ guildId, channelId, member }) {
+function canUseBotInGuild({ guildId, channelId, parentChannelId, member }) {
   if (!guildId) return true;
   const settings = getSettingsForGuild(guildId);
   const allowedChannels = settings.botResponseChannelIds || [];
-  if (allowedChannels.length > 0 && !allowedChannels.includes(String(channelId))) return false;
+  if (allowedChannels.length > 0 && !allowedChannels.includes(String(channelId)) && !allowedChannels.includes(String(parentChannelId))) return false;
   const allowedRoles = settings.botAccessRoleIds || [];
   if (allowedRoles.length === 0) return true;
   const memberRoleIds = Array.isArray(member?.roles)
@@ -377,7 +377,7 @@ async function requestAiResponse({ guildId, userId, text }) {
 
 async function handleChatInteraction(interaction) {
   const text = interaction.options.getString("message", true).trim();
-  if (!canUseBotInGuild({ guildId: interaction.guildId, channelId: interaction.channelId, member: interaction.member })) {
+  if (!canUseBotInGuild({ guildId: interaction.guildId, channelId: interaction.channelId, parentChannelId: interaction.channel?.parentId, member: interaction.member })) {
     await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
     return;
   }
@@ -1006,7 +1006,7 @@ client.on(Events.MessageCreate, (message) => {
   isReplyToBot(message)
     .then((replied) => {
       if (mentioned || replied) {
-        if (!canUseBotInGuild({ guildId: message.guildId, channelId: message.channelId, member: message.member })) return null;
+        if (!canUseBotInGuild({ guildId: message.guildId, channelId: message.channelId, parentChannelId: message.channel?.parentId, member: message.member })) return null;
         return handleTextChat(message, text);
       }
       return null;

@@ -23,7 +23,7 @@ export async function onRequestPut({ env, request, params }) {
     fetch(`https://discord.com/api/guilds/${params.guildId}/roles`, { headers }),
   ]);
   if (!channelResponse.ok || !roleResponse.ok) return json({ error: "The bot could not validate this server's channels and roles." }, 502);
-  const channelSet = new Set((await channelResponse.json()).filter((channel) => channel.type === 0).map((channel) => String(channel.id)));
+  const channelSet = new Set((await channelResponse.json()).filter((channel) => channel.type === 0 || channel.type === 15).map((channel) => String(channel.id)));
   const roleSet = new Set((await roleResponse.json()).filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => String(role.id)));
   if (channelIds.some((id) => !channelSet.has(id)) || roleIds.some((id) => !roleSet.has(id))) return json({ error: "One of those channels or roles is no longer available." }, 400);
   await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, botResponseChannelIds: channelIds, botAccessRoleIds: roleIds } }));

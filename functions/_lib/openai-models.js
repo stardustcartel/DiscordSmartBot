@@ -6,8 +6,9 @@ export const initialOpenAiModels = [
 ];
 
 function isFutureTextModel(id) {
-  const match = /^gpt-(\d+)(?:\.(\d+))?(?:-(?:astra|sol|terra|luna|mini|pro))?$/.exec(id);
+  const match = /^gpt-(\d+)(?:\.(\d+))?(?:-([a-z]+))?$/.exec(id);
   if (!match) return false;
+  if (["audio", "image", "realtime", "transcribe", "search", "codex", "tts", "live", "vision"].includes(match[3])) return false;
   const major = Number(match[1]);
   const minor = Number(match[2] || 0);
   return major > 6 || (major === 6 && minor >= 1) || (major === 5 && minor > 6);

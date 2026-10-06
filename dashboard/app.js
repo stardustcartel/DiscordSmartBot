@@ -117,7 +117,7 @@ function updateBotAccessLabel(kind) {
   const items = kind === "channels" ? botAccessChannels : botAccessRoles;
   const selectedItems = items.filter((item) => botAccessSelections[kind].has(item.id));
   const label = $(`#bot-${kind === "channels" ? "channel" : "role"}-label`);
-  if (!selectedItems.length) label.textContent = kind === "channels" ? "All text channels" : "All server roles";
+  if (!selectedItems.length) label.textContent = kind === "channels" ? "All forum and text channels" : "All server roles";
   else if (selectedItems.length === 1) label.textContent = kind === "channels" ? `# ${selectedItems[0].name}` : selectedItems[0].name;
   else label.textContent = `${selectedItems.length} ${kind === "channels" ? "channels" : "roles"} selected`;
 }
@@ -128,7 +128,7 @@ function renderBotAccessOptions(kind) {
   list.innerHTML = items.length ? items.map((item) => {
     const selectedItem = botAccessSelections[kind].has(item.id);
     const roleDot = kind === "roles" ? `<span class="permission-role-dot" style="--role-color:#${(Number(item.color) || 9539985).toString(16).padStart(6, "0")}"></span>` : "";
-    return `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${selectedItem}" data-bot-access-kind="${kind}" data-id="${esc(item.id)}">${roleDot}<span class="multi-select-check" aria-hidden="true">✓</span><span>${kind === "channels" ? "# " : ""}${esc(item.name)}</span></button>`;
+    return `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${selectedItem}" data-bot-access-kind="${kind}" data-id="${esc(item.id)}">${roleDot}<span class="multi-select-check" aria-hidden="true">✓</span><span>${kind === "channels" ? "# " : ""}${esc(item.name)}${item.type === 15 ? " · Forum" : ""}</span></button>`;
   }).join("") : '<span class="permission-no-results">No options are available.</span>';
   list.querySelectorAll("[data-bot-access-kind]").forEach((option) => {
     option.onclick = () => {
@@ -251,8 +251,8 @@ async function load() {
 function formatGeminiKeyEvent(event) {
   if (!event?.at) return "Date and person unavailable (saved before tracking).";
   const date = new Date(event.at);
-  const dateText = Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  return `${dateText} by ${event.byName || "unknown member"}`;
+  const dateText = Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short" });
+  return `added ${dateText} by ${event.byName || "unknown member"}`;
 }
 
 function renderGeminiKeyStatus(data) {
@@ -289,7 +289,7 @@ async function loadSettings() {
   loadOpenAiModels(guildId, settings.openAiModel || "gpt-6-luna");
   setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels(data.channels || []);
-  renderBotAccessControls((data.channels || []).filter((channel) => channel.type === 0), data.roles || []);
+  renderBotAccessControls((data.channels || []).filter((channel) => channel.type === 0 || channel.type === 15), data.roles || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });

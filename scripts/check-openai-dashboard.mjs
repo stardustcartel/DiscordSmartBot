@@ -50,7 +50,7 @@ globalThis.fetch = async (input, options = {}) => {
   if (url.endsWith(`/guilds/${guildId}`)) return Response.json({ owner_id: managerId });
   if (url.endsWith(`/guilds/${guildId}/roles`)) return Response.json([{ id: guildId, permissions: "0" }]);
   if (url.endsWith(`/guilds/${guildId}/members/${managerId}`)) return Response.json({ user: { id: managerId }, roles: [] });
-  if (url === "https://api.openai.com/v1/models") return Response.json({ data: [{ id: "gpt-6.2-luna" }, { id: "gpt-image-2" }, { id: "gpt-6-luna-2026-05-18" }] }, { status: options.headers.Authorization === "Bearer invalid-key" ? 401 : 200 });
+  if (url === "https://api.openai.com/v1/models") return Response.json({ data: [{ id: "gpt-6.2-luna" }, { id: "gpt-7-orbit" }, { id: "gpt-6-realtime" }, { id: "gpt-image-2" }, { id: "gpt-6-luna-2026-05-18" }] }, { status: options.headers.Authorization === "Bearer invalid-key" ? 401 : 200 });
   throw new Error(`Unexpected request: ${url}`);
 };
 
@@ -76,8 +76,8 @@ try {
   assert.equal(JSON.parse(env.DB.row.openai_secret_json).ciphertext, second.ciphertext, "Provider switch must preserve key");
   const modelList = await listModels({ env, params: { guildId }, request: requestFor("openai-model", {}) });
   const models = (await modelList.json()).models;
-  assert.ok(models.includes("gpt-5.5-pro") && models.includes("gpt-6.2-luna"));
-  assert.ok(!models.includes("gpt-image-2") && !models.includes("gpt-6-luna-2026-05-18"));
+  assert.ok(models.includes("gpt-5.5-pro") && models.includes("gpt-6.2-luna") && models.includes("gpt-7-orbit"));
+  assert.ok(!models.includes("gpt-image-2") && !models.includes("gpt-6-realtime") && !models.includes("gpt-6-luna-2026-05-18"));
   response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-image-2" }) });
   assert.equal(response.status, 400);
   response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-6.2-luna" }) });
