@@ -212,12 +212,29 @@ function renderProfilePreview(profile = {}, version = "") {
 function showWorkspace(tab = "overview") {
   $("#server-screen").hidden = true; $("#workspace").hidden = false;
   $("#personality-tab").hidden = true;
+  $("#knowledge-tab").hidden = true;
+  knowledgeDirty = false;
+  closeKnowledgeMenu();
   document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
   requestAnimationFrame(updateMobileNavHint);
 }
 function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add an AI key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
-function showTab(tab) { if (tab === "gemini") $("#personality-tab").hidden = false; else if (tab !== "personality") $("#personality-tab").hidden = true; const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`); if (button?.disabled) return toast("Connect a valid AI key to unlock Personality."); document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active")); button?.classList.add("active"); $("#gemini-tab")?.classList.toggle("expanded", tab === "gemini"); $(`#${tab}`)?.classList.add("active"); if (tab === "permissions") loadPermissions().catch((error) => toast(error.message)); requestAnimationFrame(updateMobileNavHint); }
+function showTab(tab) {
+  const aiSection = ["gemini", "personality", "knowledge"].includes(tab);
+  $("#personality-tab").hidden = !aiSection;
+  $("#knowledge-tab").hidden = !aiSection;
+  const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`);
+  if (button?.disabled) return toast("Connect a valid AI key to unlock Personality.");
+  document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active"));
+  button?.classList.add("active");
+  $("#gemini-tab")?.classList.toggle("expanded", aiSection);
+  $(`#${tab}`)?.classList.add("active");
+  if (tab === "permissions") loadPermissions().catch((error) => toast(error.message));
+  if (tab === "knowledge") loadKnowledge().catch((error) => toast(error.message));
+  else closeKnowledgeMenu();
+  requestAnimationFrame(updateMobileNavHint);
+}
 function renderServers(guilds) {
   $("#signed-out").hidden = true; $("#server-list").hidden = false; $("#server-list").innerHTML = guilds.map((guild) => `<button class="server-card" data-guild="${guild.id}"><span class="server-card-icon">${guild.icon ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">` : "✦"}</span><span><strong>${esc(guild.name)}</strong><small>Open server workspace</small></span><span class="chevron">→</span></button>`).join("") + `<a class="server-card add-server-card" href="${esc(inviteUrl)}"><span class="add-server-mark">+</span><span><strong><span class="add-server-desktop">Add TheSmartBot to another server</span><span class="add-server-mobile">Add bot to another server</span></strong><small>Choose another server you manage.</small></span><span class="chevron">→</span></a>`;
   document.querySelectorAll("[data-guild]").forEach((card) => { card.onclick = () => selectGuild(card.dataset.guild, guilds.find((guild) => guild.id === card.dataset.guild)); });
@@ -288,7 +305,7 @@ async function loadSettings() {
   selectAiProvider(settings.aiProvider);
   loadOpenAiModels(guildId, settings.openAiModel || "gpt-6-luna");
   setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
-  renderDestinationChannels(data.channels || []);
+  renderDestinationChannels((data.channels || []).filter((channel) => [0, 5].includes(channel.type)));
   renderBotAccessControls((data.channels || []).filter((channel) => channel.type === 0 || channel.type === 15), data.roles || []);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
@@ -506,4 +523,5 @@ document.addEventListener("click", (event) => { if (!event.target.closest("#dest
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
+setupKnowledge();
 load();

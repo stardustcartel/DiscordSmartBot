@@ -37,6 +37,10 @@ export async function onRequestPost({ env, request }) {
   const installedGuilds = Array.isArray(body.installedGuilds) ? body.installedGuilds.filter((guild) => /^\d{15,25}$/.test(String(guild.id || ""))) : [];
   await registerInstallations(env.DB, installedGuilds);
   const installedIds = installedGuilds.map((guild) => String(guild.id));
+  for (const guildId of installedIds) {
+    const status = body.knowledgeStatus?.[guildId];
+    if (status && JSON.stringify(status).length < 10000) await env.DB.prepare("INSERT INTO knowledge_status VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET status_json=excluded.status_json, updated_at=excluded.updated_at").bind(guildId, JSON.stringify(status), Date.now()).run();
+  }
   for (const snapshot of Array.isArray(body.bootstrap) ? body.bootstrap : []) {
     if (!installedIds.includes(String(snapshot.guildId))) continue;
     const current = await getState(env.DB, String(snapshot.guildId));

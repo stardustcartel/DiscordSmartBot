@@ -1,0 +1,12 @@
+#knowledge-form { display: grid; gap: 18px; }
+#knowledge-form > button { justify-self: start; width: auto; color: #fff; -webkit-text-fill-color: #fff; }
+#knowledge-select { min-width: 0; }
+#knowledge-options { position: relative; inset: auto; margin-top: 8px; max-height: 260px; overflow-y: auto; }
+#knowledge-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#knowledge .knowledge-note { margin: 0; line-height: 1.6; }
+#knowledge-status { margin-top: 26px; border: 1px solid #9480ef44; background: #9480ef0d; border-radius: 16px; padding: 22px; }
+#knowledge-status h3 { margin: 0 0 12px; }
+#knowledge-status-time { display: block; color: #bcb1d6; line-height: 1.6; }
+#knowledge-warnings { font-size: .85rem; color: #dfcefa; overflow-wrap: anywhere; }
+#knowledge .field-help { line-height: 1.6; }
+@media(max-width:720px) { #knowledge-status { padding: 16px; } #knowledge .panel-heading h2 { overflow-wrap: anywhere; } }

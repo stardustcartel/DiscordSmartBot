@@ -18,6 +18,7 @@ export function defaults() {
 export async function ensureSchema(db) {
   if (!db) throw new Error("D1 binding DB is not configured.");
   await db.batch([
+    db.prepare("CREATE TABLE IF NOT EXISTS knowledge_status (guild_id TEXT PRIMARY KEY, status_json TEXT NOT NULL, updated_at INTEGER NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS guild_state (guild_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, gemini_secret_json TEXT, version INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL DEFAULT 'bootstrap')"),
     db.prepare("CREATE TABLE IF NOT EXISTS guild_installations (guild_id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT, installed INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS dashboard_permissions (guild_id TEXT NOT NULL, subject_type TEXT NOT NULL CHECK(subject_type IN ('user','role')), subject_id TEXT NOT NULL, label TEXT NOT NULL, added_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (guild_id, subject_type, subject_id))"),

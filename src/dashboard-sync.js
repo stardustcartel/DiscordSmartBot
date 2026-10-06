@@ -4,10 +4,11 @@ const { Routes } = require("discord.js");
 const { ensureParentDirectory, readJson, writeJson } = require("./storage");
 
 class DashboardSync {
-  constructor({ config, guildSettings, guildSecrets }) {
+  constructor({ config, guildSettings, guildSecrets, knowledgeIndexer }) {
     this.config = config;
     this.guildSettings = guildSettings;
     this.guildSecrets = guildSecrets;
+    this.knowledgeIndexer = knowledgeIndexer;
     this.pending = new Set();
     this.syncing = false;
     this.timer = null;
@@ -72,7 +73,7 @@ class DashboardSync {
     const changedIds = [...this.pending].filter((guildId) => client.guilds.cache.has(guildId));
     changedIds.forEach((guildId) => this.pending.delete(guildId));
     try {
-      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions }) });
+      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       const result = await response.json();
       for (const remote of result.states || []) await this.applyState(client, remote);

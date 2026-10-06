@@ -19,6 +19,8 @@ const { AiChat } = require("./ai");
 const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
 const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
+const { KnowledgeIndexer } = require("./knowledge-indexer");
+const { KnowledgeRetrieval } = require("./knowledge-retrieval");
 const { ReminderStore } = require("./reminders");
 const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
 const { createDashboard } = require("./dashboard");
@@ -43,6 +45,8 @@ const guildSettings = new GuildSettingsStore(config);
 const guildSecrets = new GuildSecretsStore(config);
 const ai = new AiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
+const knowledgeIndexer = new KnowledgeIndexer(knowledge, guildSettings, guildSecrets);
+const knowledgeRetrieval = new KnowledgeRetrieval(knowledge, knowledgeIndexer, ai);
 const reminders = new ReminderStore({
   ...config,
   reminderDefaultTimeZone: config.defaultReminderTimeZone,
@@ -52,7 +56,7 @@ const youtube = new YouTubeNotifier({
   pollIntervalMs: config.youtubePollIntervalMs,
 });
 const dashboard = createDashboard({ client, config, guildSettings, guildSecrets });
-const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets });
+const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets, knowledgeIndexer });
 
 const chatCommand = new SlashCommandBuilder()
   .setName("chat")
@@ -360,11 +364,19 @@ function canUseBotInGuild({ guildId, channelId, parentChannelId, member }) {
   return memberRoleIds.some((roleId) => allowedRoles.includes(roleId));
 }
 
-async function requestAiResponse({ guildId, userId, text }) {
+async function requestAiResponse({ guildId, userId, text, channelId, messageId }) {
   const settings = getSettingsForGuild(guildId);
   const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
-  return ai.respond({
-    apiKey: guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "",
+  const apiKey = guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "";
+  let prepared;
+  if (apiKey && guildId && channelId && settings.knowledgeChannelIds.length) {
+    if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
+      const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
+    }
+    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId });
+  }
+  const response = await ai.respond({
+    apiKey,
     provider,
     model: settings.openAiModel,
     scopeId: guildId || "direct-messages",
@@ -372,7 +384,12 @@ async function requestAiResponse({ guildId, userId, text }) {
     text,
     personality: settings.personality,
     responseLimit: settings.aiResponsesPerHour,
+    conversationId: channelId,
+    context: prepared?.context,
+    forgetHistory: Boolean(prepared),
+    reserved: Boolean(prepared),
   });
+  return prepared ? knowledgeRetrieval.finish({ client, guildId, channelId, userId, answer: response, prepared }) : response;
 }
 
 async function handleChatInteraction(interaction) {
@@ -386,6 +403,7 @@ async function handleChatInteraction(interaction) {
     const response = await requestAiResponse({
       guildId: interaction.guildId,
       userId: interaction.user.id,
+      channelId: interaction.channelId,
       text,
     });
     const chunks = splitMessage(response);
@@ -446,9 +464,13 @@ async function handleKnowledgeInteraction(interaction) {
 
   if (subcommand === "search") {
     const query = interaction.options.getString("query", true);
-    const results = knowledge.search(query, interaction.guildId);
+    await interaction.deferReply({ ephemeral: true });
+    const access = await knowledgeRetrieval.access(client, interaction.guildId, interaction.channelId, interaction.user.id);
+    const found = knowledge.search(query, interaction.guildId, 5, access.allowedIds);
+    const verified = await knowledgeRetrieval.validate(client, access, found.map((item) => item.message));
+    const results = verified.map((message) => ({ message, score: "match" }));
     if (results.length === 0) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "I could not find anything matching that in this server's knowledge base.",
         ephemeral: true,
       });
@@ -468,7 +490,7 @@ async function handleKnowledgeInteraction(interaction) {
           (message.url || "No source link available"),
       )
       .join("\n\n");
-    await interaction.reply({
+    await interaction.editReply({
       content: content.slice(0, 1_900),
       ephemeral: true,
       allowedMentions: { parse: [] },
@@ -478,14 +500,8 @@ async function handleKnowledgeInteraction(interaction) {
 
   await interaction.deferReply({ ephemeral: true });
   try {
-    const result = await knowledge.sync(client, interaction.guildId);
-    await interaction.editReply(
-      "Knowledge sync complete. Fetched " +
-        result.fetched.toLocaleString() +
-        " message(s); " +
-        result.indexed.toLocaleString() +
-        " message(s) are indexed for this server.",
-    );
+    knowledgeIndexer.tick(client).catch((error) => console.warn("Knowledge sync:", error.message));
+    await interaction.editReply("Knowledge indexing is running in the background. Check AI Integration → Knowledge Base for progress.");
   } catch (error) {
     console.error("Knowledge sync failed:", error.message);
     await interaction.editReply("Knowledge sync failed: " + error.message);
@@ -694,9 +710,9 @@ async function handleSetupPersonality(interaction) {
 
 async function handleSetupKnowledgeChannel(interaction, remove) {
   const channel = interaction.options.getChannel("channel", true);
-  if (!channel.isTextBased() || channel.guildId !== interaction.guildId) {
+  if (![ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum].includes(channel.type) || channel.guildId !== interaction.guildId) {
     await interaction.reply({
-      content: "Choose a text channel in this server.",
+      content: "Choose a text, announcement, or forum channel in this server.",
       ephemeral: true,
     });
     return;
@@ -704,7 +720,7 @@ async function handleSetupKnowledgeChannel(interaction, remove) {
   const settings = remove
     ? guildSettings.removeKnowledgeChannel(interaction.guildId, channel.id)
     : guildSettings.addKnowledgeChannel(interaction.guildId, channel.id);
-  if (remove) knowledge.save();
+  if (remove) knowledge.prune(interaction.guildId);
   await interaction.reply({
     content:
       (remove ? "Stopped indexing " : "Added ") +
@@ -933,10 +949,14 @@ async function handleTextChat(message, text) {
     });
     return;
   }
+  const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
+  message.channel.sendTyping().catch(() => {});
   try {
     const response = await requestAiResponse({
       guildId: message.guildId,
       userId: message.author.id,
+      channelId: message.channelId,
+      messageId: message.id,
       text,
     });
     await sendMessageChunks(message.channel, response, message);
@@ -946,6 +966,8 @@ async function handleTextChat(message, text) {
       content: aiErrorMessage(error),
       allowedMentions: { parse: [], repliedUser: false },
     });
+  } finally {
+    clearInterval(typing);
   }
 }
 
@@ -970,6 +992,7 @@ client.once(Events.ClientReady, (readyClient) => {
     youtube.start(client);
     dashboard.start();
     dashboardSync.start(client);
+    knowledgeIndexer.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
     client.destroy();
@@ -1015,14 +1038,23 @@ client.on(Events.MessageCreate, (message) => {
 });
 
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
-  if (knowledge.upsert(newMessage)) knowledge.save();
+  (async () => { const message = newMessage.partial ? await newMessage.fetch() : newMessage; knowledge.upsert(message); })().catch(() => {});
 });
 
 client.on(Events.MessageDelete, (message) => {
   if (knowledge.remove(message)) knowledge.save();
 });
+client.on(Events.MessageBulkDelete, (messages) => { for (const message of messages.values()) knowledge.remove(message); });
+client.on(Events.ChannelDelete, (channel) => knowledge.removeChannel(channel.id));
+client.on(Events.ThreadDelete, (thread) => knowledge.removeChannel(thread.id));
+client.on(Events.ThreadCreate, (thread) => {
+  if (guildSettings.get(thread.guildId).knowledgeChannelIds.includes(thread.parentId) && thread.type !== ChannelType.PrivateThread) {
+    knowledgeIndexer.scan(thread).catch(() => {});
+  }
+});
 
 function shutdown() {
+  knowledgeIndexer.stop();
   reminders.stop();
   youtube.stop();
   client.destroy();
