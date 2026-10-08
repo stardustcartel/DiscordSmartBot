@@ -19,7 +19,6 @@ function renderKnowledgePolicy() {
   $("#knowledge-only").checked = knowledgePolicy.knowledgeOnly;
   $("#knowledge-citations").checked = knowledgePolicy.requireCitations;
   $("#knowledge-count-field").hidden = !knowledgePolicy.requireCitations;
-  $("#knowledge-exceptions").hidden = !knowledgePolicy.knowledgeOnly && !knowledgePolicy.requireCitations;
   $("#knowledge-general-field").hidden = !knowledgePolicy.knowledgeOnly;
   $("#knowledge-uncited-field").hidden = !knowledgePolicy.requireCitations;
   for (const kind of knowledgePolicyKinds) {

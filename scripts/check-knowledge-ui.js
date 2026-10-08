@@ -34,10 +34,18 @@ const context = vm.createContext({ document, $, esc: (v) => v, selected: "guild-
 vm.runInContext(fs.readFileSync(path.join(__dirname, "../dashboard/knowledge.js"), "utf8"), context);
 const run = (text) => vm.runInContext(text, context);
 async function main() {
+  const html = fs.readFileSync(path.join(__dirname, "../dashboard/index.html"), "utf8");
+  const groundingCard = html.match(/<section[^>]*id="knowledge-grounding-card"[\s\S]*?<\/section>/)?.[0];
+  const citationsCard = html.match(/<section[^>]*id="knowledge-citations-card"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(groundingCard && citationsCard, "Each setting has a separate card");
+  assert.ok(groundingCard.indexOf('id="knowledge-general-field"') > groundingCard.indexOf('id="knowledge-only"'), "Grounding exceptions sit below their own switch");
+  assert.ok(!groundingCard.includes('id="knowledge-citations"') && !citationsCard.includes('id="knowledge-general-field"'));
+  assert.ok(citationsCard.indexOf('id="knowledge-count-field"') > citationsCard.indexOf('id="knowledge-citations"'));
+  assert.ok(citationsCard.indexOf('id="knowledge-uncited-field"') > citationsCard.indexOf('id="knowledge-count-field"'));
   run("setupKnowledge()"); await run("loadKnowledge()");
   assert.equal($("#knowledge-only").checked, false);
   assert.equal($("#knowledge-citations").checked, false);
-  assert.equal($("#knowledge-exceptions").hidden, true);
+  for (const id of ["#knowledge-general-field", "#knowledge-count-field", "#knowledge-uncited-field"]) assert.equal($(id).hidden, true);
   $("#knowledge-citations").onchange({ target: { checked: true } });
   assert.equal($("#knowledge-count-field").hidden, false);
   assert.equal($("#knowledge-general-field").hidden, true);
@@ -63,6 +71,18 @@ async function main() {
   assert.equal(saved.channelIds, undefined, "Policy save must not overwrite source selection");
   $("#knowledge-only").onchange({ target: { checked: true } });
   assert.equal($("#knowledge-general-field").hidden, false);
+  $("#knowledge-citations").onchange({ target: { checked: false } });
+  assert.equal($("#knowledge-general-field").hidden, false, "Turning citations off must not hide grounding exceptions");
+  assert.equal($("#knowledge-count-field").hidden, true);
+  assert.equal($("#knowledge-uncited-field").hidden, true);
+  $("#knowledge-citations").onchange({ target: { checked: true } });
+  assert.equal($("#knowledge-count-label").textContent, "5", "Toggling preserves selected citation count");
+  assert.equal($("#knowledge-uncited-label").textContent, "2 channels selected");
+  $("#knowledge-only").onchange({ target: { checked: false } });
+  assert.equal($("#knowledge-general-field").hidden, true);
+  assert.equal($("#knowledge-count-field").hidden, false);
+  assert.equal($("#knowledge-uncited-field").hidden, false, "Turning grounding off must not hide citation settings");
+  $("#knowledge-only").onchange({ target: { checked: true } });
   await run("loadKnowledge(true)");
   assert.equal($("#knowledge-only").checked, true, "Saving sources must not discard unsaved policy edits");
   context.selected = "guild-two";
