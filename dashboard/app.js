@@ -87,16 +87,26 @@ function closeDestinationMenu() { $("#destination-list").hidden = true; $("#dest
 function closeAiProviderMenu() { $("#ai-provider-options").hidden = true; $("#ai-provider-trigger").setAttribute("aria-expanded", "false"); $("#ai-provider-trigger").classList.remove("open"); }
 function closeOpenAiModelMenu() { $("#openai-model-options").hidden = true; $("#openai-model-trigger").setAttribute("aria-expanded", "false"); $("#openai-model-trigger").classList.remove("open"); }
 let openAiReasoningEfforts = {};
+let openAiDefaultReasoning = {};
+let openAiObservedTier = null;
 const openAiReasoningLabels = { auto: "Current bot default", none: "None", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Maximum" };
 const openAiSpeedLabels = { auto: "Project default", default: "Standard", fast: "Fast (higher cost)" };
+function openAiOptionLabel(kind, value) {
+  if (value !== "auto") return (kind === "speed" ? openAiSpeedLabels : openAiReasoningLabels)[value];
+  if (kind === "reasoning") return `Current bot default (${openAiReasoningLabels[openAiDefaultReasoning[$("#openai-model").value]]?.toLowerCase() || "loading"})`;
+  const observed = openAiObservedTier;
+  const sameModel = observed?.model === $("#openai-model").value && observed?.requestedSpeed === "auto";
+  const tier = observed?.serviceTier === "priority" ? "fast" : observed?.serviceTier;
+  return sameModel && tier ? `Project default (last: ${tier})` : "Project default (not yet observed)";
+}
 function closeOpenAiOptionMenu(kind) { const menu = $(`#openai-${kind}-options`); const trigger = $(`#openai-${kind}-trigger`); menu.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.classList.remove("open"); if (kind === "reasoning") $("#openai-section").classList.remove("reasoning-menu-open"); }
-function selectOpenAiOption(kind, value) { const labels = kind === "speed" ? openAiSpeedLabels : openAiReasoningLabels; if (!labels[value]) value = "auto"; $(`#openai-${kind}`).value = value; $(`#openai-${kind}-label`).textContent = labels[value]; document.querySelectorAll(`#openai-${kind}-options .select-option`).forEach((option) => option.setAttribute("aria-selected", String(option.dataset.value === value))); closeOpenAiOptionMenu(kind); }
-function renderReasoningOptions(model) { const list = $("#openai-reasoning-options"); const choices = ["auto", ...(openAiReasoningEfforts?.[model] || ["low", "medium", "high"])]; list.replaceChildren(...choices.map((value) => { const option = document.createElement("button"); option.type = "button"; option.className = "select-option"; option.setAttribute("role", "option"); option.dataset.value = value; option.textContent = openAiReasoningLabels[value]; option.onclick = () => { selectOpenAiOption("reasoning", value); $("#openai-reasoning-trigger").focus(); }; return option; })); if (!choices.includes($("#openai-reasoning").value)) selectOpenAiOption("reasoning", "auto"); else selectOpenAiOption("reasoning", $("#openai-reasoning").value); }
-function selectOpenAiModel(model) { $("#openai-model").value = model; $("#openai-model-label").textContent = model; document.querySelectorAll("#openai-model-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.model === model))); renderReasoningOptions(model); closeOpenAiModelMenu(); }
+function selectOpenAiOption(kind, value) { const labels = kind === "speed" ? openAiSpeedLabels : openAiReasoningLabels; if (!labels[value]) value = "auto"; $(`#openai-${kind}`).value = value; $(`#openai-${kind}-label`).textContent = openAiOptionLabel(kind, value); document.querySelectorAll(`#openai-${kind}-options .select-option`).forEach((option) => { option.setAttribute("aria-selected", String(option.dataset.value === value)); if (option.dataset.value === "auto") option.textContent = openAiOptionLabel(kind, "auto"); }); closeOpenAiOptionMenu(kind); }
+function renderReasoningOptions(model) { const list = $("#openai-reasoning-options"); const choices = ["auto", ...(openAiReasoningEfforts?.[model] || ["low", "medium", "high"])]; list.replaceChildren(...choices.map((value) => { const option = document.createElement("button"); option.type = "button"; option.className = "select-option"; option.setAttribute("role", "option"); option.dataset.value = value; option.textContent = openAiOptionLabel("reasoning", value); option.onclick = () => { selectOpenAiOption("reasoning", value); $("#openai-reasoning-trigger").focus(); }; return option; })); if (!choices.includes($("#openai-reasoning").value)) selectOpenAiOption("reasoning", "auto"); else selectOpenAiOption("reasoning", $("#openai-reasoning").value); }
+function selectOpenAiModel(model) { $("#openai-model").value = model; $("#openai-model-label").textContent = model; document.querySelectorAll("#openai-model-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.model === model))); renderReasoningOptions(model); selectOpenAiOption("speed", $("#openai-speed").value); closeOpenAiModelMenu(); }
 async function loadOpenAiModels(guildId, currentModel) {
   const list = $("#openai-model-options");
   let models;
-  try { ({ models, reasoningEfforts: openAiReasoningEfforts } = await api(`/api/guild/${guildId}/openai-model`)); }
+  try { ({ models, reasoningEfforts: openAiReasoningEfforts, botDefaultReasoning: openAiDefaultReasoning } = await api(`/api/guild/${guildId}/openai-model`)); }
   catch { models = [currentModel || "gpt-6-luna"]; }
   if (guildId !== selected) return;
   if (!models.includes(currentModel)) models = [currentModel, ...models];
@@ -327,6 +337,7 @@ async function loadSettings() {
   renderProfilePreview(settings.profile, data.version);
   renderGeminiKeyStatus(data);
   renderOpenAiKeyStatus(data);
+  openAiObservedTier = data.openAiRuntime || null;
   selectAiProvider(settings.aiProvider);
   selectOpenAiOption("speed", settings.openAiSpeed || "auto");
   selectOpenAiOption("reasoning", settings.openAiReasoning || "auto");

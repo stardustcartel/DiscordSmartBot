@@ -141,6 +141,7 @@ class YouTubeNotifier {
           ...subscription,
           sourceName: feed.name || subscription.sourceName,
           lastVideoId: feed.entries[0].id,
+          lastVideoUpdatedAt: Date.now(),
         });
       }
     } finally {

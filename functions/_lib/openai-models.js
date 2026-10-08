@@ -5,6 +5,11 @@ export const initialOpenAiModels = [
   "gpt-6-luna", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 ];
 
+export function botDefaultReasoning(model) {
+  return model === "gpt-5.5-pro" ? "high"
+    : /^(gpt-5\.5|gpt-5\.4-mini|gpt-6-luna|gpt-6-sol|gpt-5\.6-(?:sol|terra|luna))$/.test(model) ? "none" : "low";
+}
+
 export function reasoningEffortsForModel(model) {
   if (model === "gpt-5.5-pro") return ["medium", "high", "xhigh"];
   const values = ["low", "medium", "high"];

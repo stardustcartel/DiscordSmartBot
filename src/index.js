@@ -57,7 +57,7 @@ const youtube = new YouTubeNotifier({
   pollIntervalMs: config.youtubePollIntervalMs,
 });
 const dashboard = createDashboard({ client, config, guildSettings, guildSecrets });
-const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets, knowledgeIndexer });
+const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets, knowledgeIndexer, ai });
 
 const chatCommand = new SlashCommandBuilder()
   .setName("chat")

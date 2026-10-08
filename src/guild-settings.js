@@ -58,6 +58,8 @@ function cleanYouTubeSubscriptions(value) {
       sourceName: cleanText(subscription?.sourceName, 200),
       destinationChannelId: String(subscription?.destinationChannelId || "").trim(),
       lastVideoId: cleanText(subscription?.lastVideoId, 100),
+      addedAt: Number.isFinite(subscription?.addedAt) ? subscription.addedAt : 0,
+      lastVideoUpdatedAt: Number.isFinite(subscription?.lastVideoUpdatedAt) ? subscription.lastVideoUpdatedAt : 0,
       announcementTemplate: cleanYouTubeAnnouncementTemplate(subscription?.announcementTemplate),
     }))
     .filter((subscription) => {

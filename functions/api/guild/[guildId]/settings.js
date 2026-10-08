@@ -35,6 +35,8 @@ export async function onRequestGet({ env, request, params }) {
     try { discordMember = await memberResponse.json(); } catch { discordMember = null; }
   }
   const state = await createStateIfMissing(env.DB, params.guildId);
+  const openAiRuntimeRow = await env.DB.prepare("SELECT runtime_json FROM openai_runtime WHERE guild_id=?").bind(params.guildId).first();
+  const openAiRuntime = openAiRuntimeRow ? JSON.parse(openAiRuntimeRow.runtime_json) : null;
   const settings = structuredClone(state.settings);
   settings.profile = settings.profile || {};
   delete settings.profile.avatarPath;
@@ -53,7 +55,7 @@ export async function onRequestGet({ env, request, params }) {
   settings.profile.avatarUrls = [...new Set([settings.profile.avatarUrl, discordAvatarUrl, storedAvatarUrl].filter(Boolean))];
   settings.profile.bannerUrls = [...new Set([settings.profile.bannerUrl, discordBannerUrl, storedBannerUrl].filter(Boolean))];
   return json(
-    { settings, hasGeminiKey: Boolean(state.geminiSecret), geminiKeyHistory: state.geminiSecret?.keyHistory || null, hasOpenAiKey: Boolean(state.openaiSecret), openAiKeyHistory: state.openaiSecret?.keyHistory || null, channels, roles, version: state.version },
+    { settings, hasGeminiKey: Boolean(state.geminiSecret), geminiKeyHistory: state.geminiSecret?.keyHistory || null, hasOpenAiKey: Boolean(state.openaiSecret), openAiKeyHistory: state.openaiSecret?.keyHistory || null, openAiRuntime, channels, roles, version: state.version },
     200,
     { "Cache-Control": "no-store" },
   );

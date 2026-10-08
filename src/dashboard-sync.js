@@ -4,11 +4,12 @@ const { Routes } = require("discord.js");
 const { ensureParentDirectory, readJson, writeJson } = require("./storage");
 
 class DashboardSync {
-  constructor({ config, guildSettings, guildSecrets, knowledgeIndexer }) {
+  constructor({ config, guildSettings, guildSecrets, knowledgeIndexer, ai }) {
     this.config = config;
     this.guildSettings = guildSettings;
     this.guildSecrets = guildSecrets;
     this.knowledgeIndexer = knowledgeIndexer;
+    this.ai = ai;
     this.pending = new Set();
     this.syncing = false;
     this.timer = null;
@@ -73,10 +74,22 @@ class DashboardSync {
     const changedIds = [...this.pending].filter((guildId) => client.guilds.cache.has(guildId));
     changedIds.forEach((guildId) => this.pending.delete(guildId));
     try {
-      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions }) });
+      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, openAiRuntime: Object.fromEntries(this.ai?.serviceTiers || []), bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       const result = await response.json();
       for (const remote of result.states || []) await this.applyState(client, remote);
+      const appliedCheckpoints = new Set();
+      for (const checkpoint of result.youtubeCheckpoints || []) {
+        if (!client.guilds.cache.has(checkpoint.guild_id)) continue;
+        const key = `${checkpoint.guild_id}:${checkpoint.destination_id}:${checkpoint.channel_id}`;
+        if (appliedCheckpoints.has(key)) continue;
+        appliedCheckpoints.add(key);
+        const existing = this.guildSettings.get(checkpoint.guild_id).youtubeSubscriptions.find((item) => item.youtubeChannelId === checkpoint.channel_id && item.destinationChannelId === checkpoint.destination_id);
+        if (existing && existing.lastVideoId !== checkpoint.video_id && Number(checkpoint.sent_at) > Number(existing.lastVideoUpdatedAt || 0)) this.guildSettings.replaceFromSync(checkpoint.guild_id, {
+          ...this.guildSettings.get(checkpoint.guild_id),
+          youtubeSubscriptions: this.guildSettings.get(checkpoint.guild_id).youtubeSubscriptions.map((item) => item.youtubeChannelId === checkpoint.channel_id && item.destinationChannelId === checkpoint.destination_id ? { ...item, lastVideoId: checkpoint.video_id, lastVideoUpdatedAt: Number(checkpoint.sent_at) } : item),
+        });
+      }
       this.state.initialized = true;
       writeJson(this.statePath, this.state);
     } catch (error) {

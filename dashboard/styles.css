@@ -136,9 +136,11 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .permission-card{margin-top:20px;padding:22px;border:1px solid #373652;border-radius:14px;background:linear-gradient(145deg,#1c1b2d,#151521)}
+.permission-access-card{border:1px solid #8b80f0;border-left:4px solid #9b8aff;background:linear-gradient(135deg,#343160,#252447 58%,#1d1d32);box-shadow:0 14px 36px #6d5af12b,inset 0 1px #c2baff24}
 .permission-role-card{transition:padding-bottom .2s ease}
 .permission-role-card.role-menu-open{padding-bottom:280px}
 .permission-card h3{margin:0 0 8px;color:var(--text);font-size:15px;font-weight:800}
+.permission-access-card h3{color:#fff;font-size:18px}
 .permission-card .hint{margin:0 0 18px;font-size:12px}
 .permission-list{display:grid;gap:8px}
 .permission-entry{display:flex;align-items:center;gap:12px;min-height:57px;padding:9px 11px;border:1px solid #393851;border-radius:10px;background:#10101b}

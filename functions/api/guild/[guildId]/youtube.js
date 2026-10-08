@@ -2,8 +2,9 @@ import { json } from "../../../_lib/auth.js";
 import { authorizedGuild } from "../../../_lib/authorize.js";
 import { mutateState } from "../../../_lib/db.js";
 import { resolveYouTubeChannel } from "../../../_lib/youtube.js";
+import { maintainYouTubeSubscriptions } from "../../../_lib/youtube-push.js";
 
-export async function onRequestPost({ env, request, params }) {
+export async function onRequestPost({ env, request, params, context }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const destinationChannelId = String(body.destinationChannelId || "");
@@ -11,8 +12,12 @@ export async function onRequestPost({ env, request, params }) {
   if (!/^\d{15,25}$/.test(destinationChannelId)) return json({ error: "Select an announcement channel." }, 400);
   let resolved;
   try { resolved = await resolveYouTubeChannel(body.source); } catch (error) { return json({ error: error.message }, 400); }
-  const subscription = { ...resolved, destinationChannelId, announcementTemplate };
+  const subscription = { ...resolved, destinationChannelId, announcementTemplate, addedAt: Date.now() };
   await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: [...(state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== subscription.youtubeChannelId || item.destinationChannelId !== destinationChannelId), subscription] } }));
+  if (String(env.YOUTUBE_WEBHOOK_SECRET || "").length >= 32) {
+    const task = maintainYouTubeSubscriptions(env).catch((error) => console.warn("YouTube subscribe failed:", error.message));
+    if (context?.waitUntil) context.waitUntil(task); else await task;
+  }
   return json({ ok: true, name: resolved.sourceName });
 }
 

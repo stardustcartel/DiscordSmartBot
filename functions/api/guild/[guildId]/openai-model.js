@@ -1,13 +1,13 @@
 import { json } from "../../../_lib/auth.js";
 import { authorizedGuild } from "../../../_lib/authorize.js";
 import { createStateIfMissing, mutateState } from "../../../_lib/db.js";
-import { availableOpenAiModels, reasoningEffortsForModel } from "../../../_lib/openai-models.js";
+import { availableOpenAiModels, botDefaultReasoning, reasoningEffortsForModel } from "../../../_lib/openai-models.js";
 
 export async function onRequestGet({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const state = await createStateIfMissing(env.DB, params.guildId);
   const models = await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY);
-  return json({ models, reasoningEfforts: Object.fromEntries(models.map((model) => [model, reasoningEffortsForModel(model)])) }, 200, { "Cache-Control": "no-store" });
+  return json({ models, reasoningEfforts: Object.fromEntries(models.map((model) => [model, reasoningEffortsForModel(model)])), botDefaultReasoning: Object.fromEntries(models.map((model) => [model, botDefaultReasoning(model)])) }, 200, { "Cache-Control": "no-store" });
 }
 
 export async function onRequestPut({ env, request, params }) {
