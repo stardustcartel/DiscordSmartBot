@@ -12,7 +12,11 @@ form>button:hover::before{transform:translateX(3px)}
 .fine-print{margin-top:28px;color:#777695;font-size:11px;line-height:1.6}.fine-print a{color:#aaa7ff;text-decoration:none}.fine-print a:hover{text-decoration:underline;color:#d0ceff}
 .key-status-history{margin-top:7px;color:#aaa8d0;font-size:11px;line-height:1.55}
 .ai-provider-section,.ai-key-section{margin-top:26px;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.ai-provider-section{border:1px solid #8b80f0;border-left:4px solid #9b8aff;background:linear-gradient(135deg,#343160,#252447 58%,#1d1d32);box-shadow:0 14px 36px #6d5af12b, inset 0 1px #c2baff24}
+#openai-section{transition:padding-bottom .2s ease}
+#openai-section.reasoning-menu-open{padding-bottom:280px}
 .ai-provider-section h3,.ai-key-section h3{margin:0;font-size:16px;color:var(--text)}
+.ai-provider-section h3{color:#fff;font-size:18px}
 .ai-provider-section .hint{margin:8px 0 0}
 .ai-provider-section form,.ai-key-section form{margin-top:18px}
 .ai-provider-section form>button,.ai-key-section form>button{color:#fff}
