@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20261005-openai"><link rel="stylesheet" href="/mobile.css?v=20261005-openai"><link rel="stylesheet" href="/knowledge.css?v=20261005-knowledge"></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smart Bot Dashboard</title><link rel="stylesheet" href="/styles.css?v=20261008-auto-responses"><link rel="stylesheet" href="/mobile.css?v=20261005-openai"><link rel="stylesheet" href="/knowledge.css?v=20261005-knowledge"></head><body>
 <header class="topbar"><a class="brand" href="/"><span class="brand-mark">✦</span><span>TheSmartBot</span></a><div class="top-actions"><span id="account" hidden></span><button id="login">Sign in with Discord</button><button id="logout" hidden>Sign out</button></div></header>
 <main>
 <section id="setup-notice" class="notice" hidden></section>
@@ -13,7 +13,7 @@
 </section>
 <section id="workspace" hidden>
   <div class="workspace-head"><button id="back" class="back">← All servers</button><div><p class="eyebrow">SERVER WORKSPACE</p><h1 id="server-title">Server settings</h1></div></div>
-  <div class="workspace-grid"><aside class="sidebar"><div class="server-chip"><div id="server-icon" class="server-icon">✦</div><div><strong id="server-name">Server</strong><small>Connected server</small></div></div><nav><button class="tab active" data-tab="overview">Overview</button><button class="tab" data-tab="youtube">YouTube notifications</button><button class="tab" data-tab="profile">Customize Bot</button><button class="tab gemini-tab" id="gemini-tab" data-tab="gemini">AI Integration <span class="nav-chevron">⌄</span></button><button class="subtab side-subtab" id="personality-tab" data-tab="personality" hidden disabled><span class="lock-icon" aria-hidden="true">⌕</span><span class="subtab-copy"><strong>Personality</strong><small>Add an AI key first</small></span></button><button class="subtab side-subtab" id="knowledge-tab" data-tab="knowledge" hidden><span class="subtab-copy"><strong>Knowledge Base</strong><small>Server knowledge</small></span></button><button class="tab" data-tab="permissions">Permissions</button><button class="tab" data-tab="support">Support</button></nav></aside><section class="content">
+  <div class="workspace-grid"><aside class="sidebar"><div class="server-chip"><div id="server-icon" class="server-icon">✦</div><div><strong id="server-name">Server</strong><small>Connected server</small></div></div><nav><button class="tab active" data-tab="overview">Overview</button><button class="tab" data-tab="youtube">YouTube notifications</button><button class="tab" data-tab="profile">Customize Bot</button><button class="tab" data-tab="permissions">Permissions</button><button class="tab gemini-tab" id="gemini-tab" data-tab="gemini">AI Integration <span class="nav-chevron">⌄</span></button><button class="subtab side-subtab" id="personality-tab" data-tab="personality" hidden disabled><span class="lock-icon" aria-hidden="true">⌕</span><span class="subtab-copy"><strong>Personality</strong><small>Add an AI key first</small></span></button><button class="subtab side-subtab" id="knowledge-tab" data-tab="knowledge" hidden><span class="subtab-copy"><strong>Knowledge Base</strong><small>Server knowledge</small></span></button><button class="tab" data-tab="support">Support</button></nav></aside><section class="content">
   <section class="panel active" id="overview"><div class="panel-heading"><p class="eyebrow">OVERVIEW</p><h2>Everything in one place.</h2><p class="hint">These settings apply only to <strong id="overview-server"></strong>.</p></div><div class="overview-cards"><button class="overview-card" data-open="profile"><span class="card-icon">◉</span><strong>Customize bot</strong><small>Set its identity and access.</small></button><button class="overview-card" data-open="gemini"><span class="card-icon">◆</span><strong>AI Integration</strong><small>Connect Gemini or OpenAI.</small></button><button class="overview-card" data-open="youtube"><span class="card-icon">▶</span><strong>YouTube alerts</strong><small>Announce new videos.</small></button><button class="overview-card" data-open="support"><span class="card-icon">?</span><strong>Support</strong><small>Questions, help, and custom features.</small></button></div></section>
   <section class="panel" id="youtube"><div class="panel-heading"><p class="eyebrow">YOUTUBE NOTIFICATIONS</p><h2>Never miss a new upload.</h2><p class="hint">Have the bot Post an announcement whenever a channel publishes a video.</p></div><form id="youtube-form"><label>YouTube channel URL<input name="source" placeholder="https://www.youtube.com/@creator" required></label><label>Announcement channel<div class="custom-select" id="destination-select"><button type="button" id="destination-trigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false"><span id="destination-label">Loading channels…</span><span class="select-chevron" aria-hidden="true">⌄</span></button><div id="destination-list" class="select-menu" role="listbox" hidden></div><input type="hidden" name="destination" id="destination" required></div></label><label>Announcement message<textarea name="announcementTemplate" maxlength="1500">📺 **{channel} uploaded a new video:**&#10;**{title}**</textarea><small class="field-help"><code>{channel}</code> and <code>{title}</code> appear as the actual channel name and video title. The video link is always added automatically.</small></label><button>Save notification</button></form><div class="section-label">Current channel notifications</div><div id="subscriptions" class="list"></div></section>
   <section class="panel" id="support"><div class="panel-heading"><p class="eyebrow">SUPPORT</p><h2>We're here to help.</h2><p class="hint">For any questions and support, please email <a href="mailto:thesmartbot@proton.me">thesmartbot@proton.me</a>.</p><p class="hint">If you are in need of custom features, please reach out and we can discuss feasibility and reasonable pricing.</p></div></section>
@@ -60,16 +60,25 @@
           <p class="hint">Choose the channels where the bot can respond when mentioned or replied to.</p>
           <div class="custom-select bot-access-select" id="bot-channel-select">
             <button type="button" id="bot-channel-trigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false"><span id="bot-channel-label">All forum and text channels</span><span class="select-chevron" aria-hidden="true">⌄</span></button>
-            <div id="bot-channel-options" class="select-menu" role="listbox" hidden></div>
+            <div id="bot-channel-options" class="select-menu" role="listbox" aria-multiselectable="true" hidden></div>
           </div>
-          <small class="field-help">Leave this empty to let the bot respond in every text channel.</small>
+          <small class="field-help">Leave this empty to let the bot respond in every forum and text channel.</small>
+          <div class="bot-auto-section" id="bot-auto-card">
+            <h3>Automatic responses</h3>
+            <p class="hint">The bot replies to every text message in these channels without an @mention, including forum posts and comments. Bot Access role rules still apply.</p>
+            <div class="custom-select bot-access-select" id="bot-auto-select">
+              <button type="button" id="bot-auto-trigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="bot-auto-options"><span id="bot-auto-label">No automatic response channels</span><span class="select-chevron" aria-hidden="true">⌄</span></button>
+              <div id="bot-auto-options" class="select-menu" role="listbox" aria-multiselectable="true" aria-label="Automatic response channels" hidden></div>
+            </div>
+            <small class="field-help">Leave this empty to require an @mention or reply.</small>
+          </div>
         </div>
         <div class="bot-access-card" id="bot-role-card">
           <h3>Bot Access</h3>
           <p class="hint">Choose which roles in your server can communicate with the bot.</p>
           <div class="custom-select bot-access-select" id="bot-role-select">
             <button type="button" id="bot-role-trigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false"><span id="bot-role-label">All server roles</span><span class="select-chevron" aria-hidden="true">⌄</span></button>
-            <div id="bot-role-options" class="select-menu" role="listbox" hidden></div>
+            <div id="bot-role-options" class="select-menu" role="listbox" aria-multiselectable="true" hidden></div>
           </div>
           <small class="field-help">Leave this empty to let every server member communicate with the bot.</small>
         </div>
@@ -94,4 +103,4 @@
     <div class="announcement-dialog-actions"><button type="button" id="announcement-close" class="button">Close</button><button type="submit" id="announcement-save" class="button" hidden>Save and close</button></div>
   </form>
 </div>
-<p id="toast" role="status"></p><script src="/knowledge.js?v=20261005-knowledge"></script><script src="/app.js?v=20261005-knowledge"></script></body></html>
+<p id="toast" role="status"></p><script src="/knowledge.js?v=20261008-auto-responses"></script><script src="/app.js?v=20261008-auto-responses"></script></body></html>

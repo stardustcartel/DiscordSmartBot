@@ -15,8 +15,9 @@ export async function onRequestPut({ env, request, params }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "Choose the channels and roles to save." }, 400); }
   const channelIds = uniqueIds(body.channelIds);
+  const autoChannelIds = uniqueIds(body.autoChannelIds);
   const roleIds = uniqueIds(body.roleIds);
-  if (!channelIds || !roleIds) return json({ error: "Choose valid channels and roles." }, 400);
+  if (!channelIds || !autoChannelIds || !roleIds) return json({ error: "Choose valid channels and roles." }, 400);
   const headers = { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
   const [channelResponse, roleResponse] = await Promise.all([
     fetch(`https://discord.com/api/guilds/${params.guildId}/channels`, { headers }),
@@ -25,7 +26,7 @@ export async function onRequestPut({ env, request, params }) {
   if (!channelResponse.ok || !roleResponse.ok) return json({ error: "The bot could not validate this server's channels and roles." }, 502);
   const channelSet = new Set((await channelResponse.json()).filter((channel) => channel.type === 0 || channel.type === 15).map((channel) => String(channel.id)));
   const roleSet = new Set((await roleResponse.json()).filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => String(role.id)));
-  if (channelIds.some((id) => !channelSet.has(id)) || roleIds.some((id) => !roleSet.has(id))) return json({ error: "One of those channels or roles is no longer available." }, 400);
-  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, botResponseChannelIds: channelIds, botAccessRoleIds: roleIds } }));
-  return json({ ok: true, channelIds, roleIds });
+  if (channelIds.some((id) => !channelSet.has(id)) || autoChannelIds.some((id) => !channelSet.has(id) || (channelIds.length && !channelIds.includes(id))) || roleIds.some((id) => !roleSet.has(id))) return json({ error: "One of those channels or roles is no longer available or allowed." }, 400);
+  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, botResponseChannelIds: channelIds, botAutoResponseChannelIds: autoChannelIds, botAccessRoleIds: roleIds } }));
+  return json({ ok: true, channelIds, autoChannelIds, roleIds });
 }

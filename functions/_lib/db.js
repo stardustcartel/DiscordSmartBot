@@ -5,6 +5,7 @@ const defaultSettings = {
   openAiModel: "gpt-6-luna",
   knowledgeChannelIds: [],
   botResponseChannelIds: [],
+  botAutoResponseChannelIds: [],
   botAccessRoleIds: [],
   youtubeSubscriptions: [],
   reminderTimeZone: "America/Los_Angeles",

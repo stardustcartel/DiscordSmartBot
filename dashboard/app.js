@@ -101,12 +101,18 @@ function selectAiProvider(provider) { const value = provider === "openai" ? "ope
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text or announcement channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}${channel.type === 5 ? " · Announcement" : ""}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
 let botAccessChannels = [];
 let botAccessRoles = [];
-let botAccessSelections = { channels: new Set(), roles: new Set() };
+let botAccessSelections = { channels: new Set(), auto: new Set(), roles: new Set() };
+const botAccessNames = { channels: "channel", auto: "auto", roles: "role" };
+function botAccessItems(kind) {
+  if (kind === "roles") return botAccessRoles;
+  if (kind === "auto" && botAccessSelections.channels.size) return botAccessChannels.filter((channel) => botAccessSelections.channels.has(channel.id));
+  return botAccessChannels;
+}
 
 function closeBotAccessMenus() {
-  ["channels", "roles"].forEach((kind) => {
-    $(`#bot-${kind === "channels" ? "channel" : "role"}-options`).hidden = true;
-    const trigger = $(`#bot-${kind === "channels" ? "channel" : "role"}-trigger`);
+  Object.keys(botAccessNames).forEach((kind) => {
+    $(`#bot-${botAccessNames[kind]}-options`).hidden = true;
+    const trigger = $(`#bot-${botAccessNames[kind]}-trigger`);
     trigger.setAttribute("aria-expanded", "false");
     trigger.classList.remove("open");
   });
@@ -114,31 +120,43 @@ function closeBotAccessMenus() {
 }
 
 function updateBotAccessLabel(kind) {
-  const items = kind === "channels" ? botAccessChannels : botAccessRoles;
+  const items = botAccessItems(kind);
   const selectedItems = items.filter((item) => botAccessSelections[kind].has(item.id));
-  const label = $(`#bot-${kind === "channels" ? "channel" : "role"}-label`);
-  if (!selectedItems.length) label.textContent = kind === "channels" ? "All forum and text channels" : "All server roles";
-  else if (selectedItems.length === 1) label.textContent = kind === "channels" ? `# ${selectedItems[0].name}` : selectedItems[0].name;
-  else label.textContent = `${selectedItems.length} ${kind === "channels" ? "channels" : "roles"} selected`;
+  const label = $(`#bot-${botAccessNames[kind]}-label`);
+  if (!selectedItems.length) label.textContent = kind === "channels" ? "All forum and text channels" : kind === "auto" ? "No automatic response channels" : "All server roles";
+  else if (selectedItems.length === 1) label.textContent = kind === "roles" ? selectedItems[0].name : `# ${selectedItems[0].name}`;
+  else label.textContent = `${selectedItems.length} ${kind === "roles" ? "roles" : "channels"} selected`;
 }
 
 function renderBotAccessOptions(kind) {
-  const items = kind === "channels" ? botAccessChannels : botAccessRoles;
-  const list = $(`#bot-${kind === "channels" ? "channel" : "role"}-options`);
+  const items = botAccessItems(kind);
+  const list = $(`#bot-${botAccessNames[kind]}-options`);
+  const scrollTop = list.scrollTop;
+  const focusedId = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   list.innerHTML = items.length ? items.map((item) => {
     const selectedItem = botAccessSelections[kind].has(item.id);
     const roleDot = kind === "roles" ? `<span class="permission-role-dot" style="--role-color:#${(Number(item.color) || 9539985).toString(16).padStart(6, "0")}"></span>` : "";
-    return `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${selectedItem}" data-bot-access-kind="${kind}" data-id="${esc(item.id)}">${roleDot}<span class="multi-select-check" aria-hidden="true">✓</span><span>${kind === "channels" ? "# " : ""}${esc(item.name)}${item.type === 15 ? " · Forum" : ""}</span></button>`;
+    return `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${selectedItem}" data-bot-access-kind="${kind}" data-id="${esc(item.id)}">${roleDot}<span class="multi-select-check" aria-hidden="true">✓</span><span>${kind === "roles" ? "" : "# "}${esc(item.name)}${item.type === 15 ? " · Forum" : ""}</span></button>`;
   }).join("") : '<span class="permission-no-results">No options are available.</span>';
   list.querySelectorAll("[data-bot-access-kind]").forEach((option) => {
-    option.onclick = () => {
+    option.onclick = (event) => {
+      event.stopPropagation();
       const selectedIds = botAccessSelections[kind];
       if (selectedIds.has(option.dataset.id)) selectedIds.delete(option.dataset.id);
       else selectedIds.add(option.dataset.id);
+      if (kind === "channels") {
+        const available = new Set(botAccessItems("auto").map((item) => item.id));
+        for (const id of botAccessSelections.auto) if (!available.has(id)) botAccessSelections.auto.delete(id);
+        renderBotAccessOptions("auto");
+        updateBotAccessLabel("auto");
+        $("#bot-auto-trigger").disabled = !available.size;
+      }
       renderBotAccessOptions(kind);
       updateBotAccessLabel(kind);
     };
   });
+  list.scrollTop = scrollTop;
+  if (focusedId) [...list.querySelectorAll("[data-id]")].find((item) => item.dataset.id === focusedId)?.focus();
 }
 
 function renderBotAccessControls(channels, roles) {
@@ -146,18 +164,19 @@ function renderBotAccessControls(channels, roles) {
   botAccessRoles = roles;
   botAccessSelections = {
     channels: new Set((settings.botResponseChannelIds || []).filter((id) => channels.some((channel) => channel.id === id))),
+    auto: new Set((settings.botAutoResponseChannelIds || []).filter((id) => channels.some((channel) => channel.id === id) && (!(settings.botResponseChannelIds || []).length || settings.botResponseChannelIds.includes(id)))),
     roles: new Set((settings.botAccessRoleIds || []).filter((id) => roles.some((role) => role.id === id))),
   };
-  ["channels", "roles"].forEach((kind) => {
+  Object.keys(botAccessNames).forEach((kind) => {
     renderBotAccessOptions(kind);
     updateBotAccessLabel(kind);
-    const trigger = $(`#bot-${kind === "channels" ? "channel" : "role"}-trigger`);
-    trigger.disabled = !(kind === "channels" ? channels : roles).length;
+    const trigger = $(`#bot-${botAccessNames[kind]}-trigger`);
+    trigger.disabled = !botAccessItems(kind).length;
   });
 }
 
 function toggleBotAccessMenu(kind) {
-  const name = kind === "channels" ? "channel" : "role";
+  const name = botAccessNames[kind];
   const list = $(`#bot-${name}-options`);
   const opening = list.hidden;
   closeBotAccessMenus();
@@ -477,10 +496,11 @@ $("#bot-access-form").onsubmit = async (event) => {
   try {
     const data = await api(`/api/guild/${guildId}/bot-access`, {
       method: "PUT",
-      body: JSON.stringify({ channelIds: [...botAccessSelections.channels], roleIds: [...botAccessSelections.roles] }),
+      body: JSON.stringify({ channelIds: [...botAccessSelections.channels], autoChannelIds: [...botAccessSelections.auto], roleIds: [...botAccessSelections.roles] }),
     });
     if (guildId !== selected) return;
     settings.botResponseChannelIds = data.channelIds;
+    settings.botAutoResponseChannelIds = data.autoChannelIds;
     settings.botAccessRoleIds = data.roleIds;
     toast("Bot access saved.");
   } catch (error) { toast(error.message || "Could not save bot access."); }
@@ -518,6 +538,7 @@ $("#ai-provider-trigger").onclick = () => { const list = $("#ai-provider-options
 $("#openai-model-trigger").onclick = () => { const list = $("#openai-model-options"); const opening = list.hidden; list.hidden = !opening; $("#openai-model-trigger").setAttribute("aria-expanded", String(opening)); $("#openai-model-trigger").classList.toggle("open", opening); };
 document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => { option.onclick = () => { selectAiProvider(option.dataset.provider); $("#ai-provider-trigger").focus(); }; });
 $("#bot-channel-trigger").onclick = () => toggleBotAccessMenu("channels");
+$("#bot-auto-trigger").onclick = () => toggleBotAccessMenu("auto");
 $("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest("#openai-model-select")) closeOpenAiModelMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });

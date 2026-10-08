@@ -11,7 +11,8 @@ function renderKnowledgeChannels() {
   const list = $("#knowledge-options");
   const focusedId = document.activeElement?.dataset.knowledgeId;
   list.innerHTML = knowledgeChannels.map((c) => `<button type="button" class="select-option multi-select-option" role="option" aria-selected="${knowledgeSelections.has(c.id)}" data-knowledge-id="${esc(c.id)}"><span class="multi-select-check" aria-hidden="true">✓</span><span># ${esc(c.name)}${c.type === 15 ? " · Forum" : c.type === 5 ? " · Announcement" : ""}</span></button>`).join("") || '<p class="hint">No readable channels available.</p>';
-  list.querySelectorAll("button").forEach((button) => { button.onclick = () => {
+  list.querySelectorAll("button").forEach((button) => { button.onclick = (event) => {
+    event.stopPropagation();
     const id = button.dataset.knowledgeId;
     knowledgeSelections.has(id) ? knowledgeSelections.delete(id) : knowledgeSelections.add(id);
     knowledgeDirty = true;

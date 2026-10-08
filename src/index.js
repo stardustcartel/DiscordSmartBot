@@ -26,6 +26,7 @@ const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./
 const { createDashboard } = require("./dashboard");
 const { DashboardSync } = require("./dashboard-sync");
 const { ensureParentDirectory } = require("./storage");
+const { shouldAutoRespond } = require("./bot-response");
 
 if (!config.discordToken) {
   throw new Error("DISCORD_TOKEN is missing from .env");
@@ -1014,7 +1015,7 @@ client.on(Events.InteractionCreate, (interaction) => {
 
 client.on(Events.MessageCreate, (message) => {
   if (knowledge.upsert(message)) knowledge.save();
-  if (message.author.bot || message.mentions.everyone) return;
+  if (message.author.bot || message.webhookId || message.mentions.everyone) return;
   if (!message.guildId) {
     handleTextChat(message, message.content.trim()).catch((error) =>
       console.error("Direct-message handling failed:", error.message),
@@ -1026,6 +1027,11 @@ client.on(Events.MessageCreate, (message) => {
   const text = mentioned
     ? message.content.replace(mentionPattern, "").trim()
     : message.content.trim();
+  const automatic = shouldAutoRespond(getSettingsForGuild(message.guildId), message.channelId, message.channel?.parentId);
+  if (automatic && !mentioned && text && canUseBotInGuild({ guildId: message.guildId, channelId: message.channelId, parentChannelId: message.channel?.parentId, member: message.member })) {
+    handleTextChat(message, text).catch((error) => console.error("Automatic response failed:", error.message));
+    return;
+  }
   isReplyToBot(message)
     .then((replied) => {
       if (mentioned || replied) {
