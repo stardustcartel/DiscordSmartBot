@@ -6,6 +6,7 @@ const defaultSettings = {
   openAiSpeed: "auto",
   openAiReasoning: "auto",
   knowledgeChannelIds: [],
+  knowledgePolicy: { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [] },
   botResponseChannelIds: [],
   botAutoResponseChannelIds: [],
   botAccessRoleIds: [],

@@ -21,6 +21,7 @@ const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
 const { KnowledgeIndexer } = require("./knowledge-indexer");
 const { KnowledgeRetrieval } = require("./knowledge-retrieval");
+const { effectivePolicy, directClockAnswer, simpleGreeting, insufficientEvidence } = require("./knowledge-policy");
 const { ReminderStore } = require("./reminders");
 const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
 const { createDashboard } = require("./dashboard");
@@ -369,12 +370,15 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
   const settings = getSettingsForGuild(guildId);
   const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
   const apiKey = guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "";
+  const destination = guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
+  const policy = effectivePolicy(settings.knowledgePolicy, destination);
   let prepared;
-  if (apiKey && guildId && channelId && settings.knowledgeChannelIds.length) {
+  if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
     prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId });
+    if (policy.knowledgeOnly && !prepared.sources.length) return simpleGreeting(text) ? "Hi! What would you like to know about this server?" : insufficientEvidence;
   }
   const response = await ai.respond({
     apiKey,
@@ -391,8 +395,9 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
     context: prepared?.context,
     forgetHistory: Boolean(prepared),
     reserved: Boolean(prepared),
+    knowledgePolicy: policy,
   });
-  return prepared ? knowledgeRetrieval.finish({ client, guildId, channelId, userId, answer: response, prepared }) : response;
+  return prepared ? knowledgeRetrieval.finish({ client, guildId, channelId, userId, answer: response, prepared, policy }) : response;
 }
 
 async function handleChatInteraction(interaction) {

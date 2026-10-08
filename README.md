@@ -180,6 +180,15 @@ Responses API with `OPENAI_MODEL` (default `gpt-6-luna`); OpenAI usage is
 billed to the key owner's OpenAI account. The Gemini model ladder applies only
 when Gemini is selected. There is no automatic fallback between providers.
 
+The model picker lists newer GPT generations first (numeric version order).
+Within the same generation it uses OpenAI's model `created` metadata when
+available, then a stable name order; creation time is not a guarantee of public
+release date or model strength. The list refreshes from the saved key's models
+endpoint when the server workspace loads and includes new eligible GPT text
+model IDs. Known audio/image/realtime/search/coding-specific variants and dated
+snapshots are excluded. Curated choices remain available when discovery fails;
+listing a model does not guarantee that the key can make a paid request to it.
+
 ## Gemini model fallback
 
 `GEMINI_MODEL_LADDER` is an optional comma-separated list of Gemini model IDs.
@@ -205,6 +214,31 @@ The bot indexes human-authored message text, public threads, and archived public
 The first backfill is incremental (up to eight conversations per sweep); larger servers take longer. Semantic indexing processes up to 32 messages per server per sweep using the **active provider's key**: OpenAI `text-embedding-3-small` or Gemini `gemini-embedding-001`. Provider changes rebuild the vectors gradually; keyword search stays available. API errors trigger a five-minute embedding cooldown. These requests use that provider's quota/billing. No additional operator key is required, and no automatic cross-provider fallback is performed.
 
 For questions, the selected chat model reformulates the query with the forum title/recent user questions. Keyword and semantic results are combined, nearby conversation messages included, and a bounded set of verified excerpts is sent to the AI. Source markers become real Discord message links. The user's Personality remains responsible for server-specific guidance and tone. Archive text is untrusted evidence, not instructions; missing or conflicting evidence must be acknowledged. This cannot guarantee every generated statement is correct, so important answers should be checked against the cited sources.
+
+**Answer sources & citations** contains two independent, opt-in switches:
+
+- **Require knowledge-backed answers** limits factual answers to the available
+  permitted server records. Missing evidence produces a clarification/abstention.
+  A narrow standalone current-date/time question uses the trusted UTC clock, not
+  old posts; greetings and clarifications do not require archive evidence.
+- **Require citations** requires up to 1–5 distinct supporting sources for
+  knowledge-backed answers. It works without strict mode; clearly labelled
+  general knowledge is still allowed when strict mode is off. It does not pad
+  citations or cite nonexistent records.
+- Separate channel exceptions relax only their respective control. Forum
+  selections apply to posts/replies, not to other channels. None of these
+  controls override Discord/source permissions or bot-access settings.
+
+Both providers receive a trusted UTC timestamp and explicit rules separating
+historical evidence from current facts. No live web-search tool is enabled.
+Before publishing a retrieved-knowledge answer, an additional call to the
+selected provider/model reviews claims, dates, uncertainty, and sources. Code
+validates source IDs, exact quoted evidence, and citation limits, then rechecks
+live source permissions/content. Failed verification withholds the draft.
+This additional call uses API quota/credits and can add latency; semantic
+verification is still model-based, not a guarantee of correctness. Policy is
+stored in `settings.knowledgePolicy` in D1 and Oracle's settings cache; existing
+servers default to both switches off. No new secret or D1 migration is needed.
 
 Permission checks run outside the model. A source needs current read/history access for both the member and bot. Cross-channel answers use globally readable sources or channels with matching read-permission overwrites; private threads and NSFW-to-non-NSFW disclosure are excluded. This intentionally conservative rule can omit sources that might be safe under more complex role arrangements. Knowledge-answer evidence is not reused as conversation memory across requests. New source selections also require the dashboard editor to have read access. Server-message contents and embeddings never sync to Cloudflare; D1 receives only source selection and progress metadata. `knowledge_status` is created automatically; `migrations/0004_knowledge_status.sql` is the manual equivalent.
 

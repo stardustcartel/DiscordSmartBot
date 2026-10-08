@@ -6,7 +6,7 @@ import { availableOpenAiModels, botDefaultReasoning, reasoningEffortsForModel } 
 export async function onRequestGet({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const state = await createStateIfMissing(env.DB, params.guildId);
-  const models = await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY);
+  const models = await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY, state.settings.openAiModel);
   return json({ models, reasoningEfforts: Object.fromEntries(models.map((model) => [model, reasoningEffortsForModel(model)])), botDefaultReasoning: Object.fromEntries(models.map((model) => [model, botDefaultReasoning(model)])) }, 200, { "Cache-Control": "no-store" });
 }
 

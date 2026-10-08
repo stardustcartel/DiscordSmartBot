@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { readJson, writeJson } = require("./storage");
+const { normalizePolicy } = require("./knowledge-policy");
 
 const fixedTimeZones = new Set([
   "UTC", "GMT", "PST", "PDT", "MST", "MDT", "CST", "CDT", "EST", "EDT",
@@ -104,6 +105,7 @@ class GuildSettingsStore {
       openAiSpeed: "auto",
       openAiReasoning: "auto",
       knowledgeChannelIds: [],
+      knowledgePolicy: normalizePolicy(),
       botResponseChannelIds: [],
       botAutoResponseChannelIds: [],
       botAccessRoleIds: [],
@@ -135,6 +137,7 @@ class GuildSettingsStore {
       openAiSpeed: ["auto", "default", "fast"].includes(value?.openAiSpeed) ? value.openAiSpeed : "auto",
       openAiReasoning: ["auto", "none", "low", "medium", "high", "xhigh", "max"].includes(value?.openAiReasoning) ? value.openAiReasoning : "auto",
       knowledgeChannelIds: cleanChannelIds(value?.knowledgeChannelIds),
+      knowledgePolicy: normalizePolicy(value?.knowledgePolicy),
       botResponseChannelIds: cleanChannelIds(value?.botResponseChannelIds),
       botAutoResponseChannelIds: cleanChannelIds(value?.botAutoResponseChannelIds),
       botAccessRoleIds: cleanChannelIds(value?.botAccessRoleIds),

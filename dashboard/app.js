@@ -249,6 +249,10 @@ function showWorkspace(tab = "overview") {
   $("#personality-tab").hidden = true;
   $("#knowledge-tab").hidden = true;
   knowledgeDirty = false;
+  knowledgePolicyDirty = false;
+  knowledgePolicyGuild = null;
+  $("#knowledge-form").inert = true;
+  $("#knowledge-policy-form").inert = true;
   closeKnowledgeMenu();
   document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");

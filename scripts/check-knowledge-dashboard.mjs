@@ -41,6 +41,17 @@ try {
   const result = await (await onRequestGet({ ...args, request: request("GET") })).json();
   assert.equal(result.status.indexed, 40);
   assert.equal(result.channels.length, 1);
+  assert.equal(result.policy.knowledgeOnly, false);
+  assert.equal(result.policy.requireCitations, false);
+  const policy = { knowledgeOnly: false, requireCitations: true, citationCount: 5, generalChannels: [], uncitedChannels: [channelId] };
+  assert.equal((await onRequestPut({ ...args, request: request("PUT", { policy }) })).status, 200, "Citations work independently of knowledge-only mode");
+  assert.deepEqual((await getState(DB, guildId)).settings.knowledgePolicy, policy);
+  assert.deepEqual((await getState(DB, guildId)).settings.knowledgeChannelIds, [channelId], "Policy save must preserve sources");
+  for (const changes of [{ citationCount: 6 }, { citationCount: "2" }, { knowledgeOnly: "true" }, { generalChannels: ["100000000000000888"] }, { uncitedChannels: [restricted.id] }, { generalChannels: [channelId, channelId] }]) {
+    assert.equal((await onRequestPut({ ...args, request: request("PUT", { policy: { ...policy, ...changes } }) })).status, 400);
+  }
   assert.equal((await onRequestPut({ ...args, request: request("PUT", { channelIds: [] }) })).status, 200);
+  assert.deepEqual((await getState(DB, guildId)).settings.knowledgePolicy, policy, "Source changes must preserve policy");
+  assert.equal((await onRequestPut({ ...args, request: request("PUT", { policy }, false) })).status, 403);
   console.log("Knowledge dashboard authorization, channel validation, persistence, status synchronization, and disabling passed.");
 } finally { globalThis.fetch = originalFetch; sqlite.close(); }

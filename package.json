@@ -15,7 +15,7 @@
     "invite": "node scripts/print-invite-url.js",
     "generate:secrets-key": "node scripts/generate-secrets-key.js",
     "set:gemini-key": "node scripts/set-guild-gemini-key.js",
-    "check:knowledge": "node --no-warnings scripts/check-knowledge.js && node --no-warnings scripts/check-knowledge-dashboard.mjs",
+    "check:knowledge": "node --no-warnings scripts/check-knowledge.js && node --no-warnings scripts/check-knowledge-dashboard.mjs && node scripts/check-knowledge-policy.js && node scripts/check-knowledge-ui.js",
     "check:auto-response": "node --no-warnings scripts/check-auto-response.mjs"
   },
   "engines": {

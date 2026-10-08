@@ -5,6 +5,7 @@ import { onRequestPut as selectProvider } from "../functions/api/guild/[guildId]
 import { onRequestGet as listModels, onRequestPut as saveModel } from "../functions/api/guild/[guildId]/openai-model.js";
 import { onRequestPut as saveOptions } from "../functions/api/guild/[guildId]/openai-options.js";
 import { seal } from "../functions/_lib/auth.js";
+import { availableOpenAiModels, sortOpenAiModels } from "../functions/_lib/openai-models.js";
 
 const guildId = "1545533279766319215";
 const managerId = "100000000000000001";
@@ -56,6 +57,9 @@ globalThis.fetch = async (input, options = {}) => {
 };
 
 try {
+  assert.deepEqual(sortOpenAiModels(["gpt-5.5-pro", "gpt-7.2", "gpt-6.1-sol", "gpt-7.10", "gpt-5.4-mini"]), ["gpt-7.10", "gpt-7.2", "gpt-6.1-sol", "gpt-5.5-pro", "gpt-5.4-mini"]);
+  assert.deepEqual(sortOpenAiModels(["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"], new Map([["gpt-6-sol", 20], ["gpt-6-luna", 30], ["gpt-6-astra", 10]])), ["gpt-6-luna", "gpt-6-sol", "gpt-6-astra"]);
+  assert.equal((await availableOpenAiModels(null, null))[0], "gpt-6.1-sol", "No-key fallback is newest generation first");
   let response = await selectProvider({ env, params: { guildId }, request: requestFor("ai-provider", { provider: "openai" }) });
   assert.equal(response.status, 400, "Cannot select OpenAI before adding a key");
   response = await saveOpenAiKey({ env, params: { guildId }, request: requestFor("openai", { apiKey: "invalid-key" }) });
@@ -77,6 +81,8 @@ try {
   assert.equal(JSON.parse(env.DB.row.openai_secret_json).ciphertext, second.ciphertext, "Provider switch must preserve key");
   const modelList = await listModels({ env, params: { guildId }, request: requestFor("openai-model", {}) });
   const models = (await modelList.json()).models;
+  assert.equal(models[0], "gpt-7-orbit");
+  assert.ok(models.indexOf("gpt-6.1-sol") < models.indexOf("gpt-5.5-pro"));
   assert.ok(models.includes("gpt-5.5-pro") && models.includes("gpt-6.2-luna") && models.includes("gpt-7-orbit"));
   assert.ok(!models.includes("gpt-image-2") && !models.includes("gpt-6-realtime") && !models.includes("gpt-6-luna-2026-05-18"));
   response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-image-2" }) });

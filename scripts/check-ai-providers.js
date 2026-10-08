@@ -49,7 +49,9 @@ async function main() {
   const args = { provider: "openai", apiKey: reloaded.getOpenAiKey(guildId), scopeId: guildId, userId: "user", personality: "Be cheerful.", responseLimit: 30 };
   assert.equal(await ai.respond({ ...args, text: "Hi" }), "Hello from OpenAI");
   assert.equal(requests[0].body.model, "gpt-6-luna");
-  assert.equal(requests[0].body.instructions, "Be cheerful.");
+  assert.ok(requests[0].body.instructions.startsWith("Be cheerful."));
+  assert.ok(requests[0].body.instructions.includes("Trusted runtime clock:"));
+  assert.ok(requests[0].body.instructions.includes("timestamp does not establish today's date"));
   assert.equal(requests[0].body.store, false);
   assert.equal(requests[0].body.reasoning.effort, "none");
   assert.equal(requests[0].options.headers.Authorization, "Bearer second-openai-key");
@@ -68,6 +70,16 @@ async function main() {
   await ai.respond({ ...args, model: "gpt-5.5-pro", openAiSpeed: "default", openAiReasoning: "none", text: "Invalid effort fallback" });
   assert.equal(requests[5].body.service_tier, "default");
   assert.equal(requests[5].body.reasoning.effort, "high");
+  const beforeClock = requests.length;
+  const clockAnswer = await ai.respond({ ...args, text: "What is the current date/time?" });
+  assert.ok(clockAnswer.includes("UTC"));
+  assert.equal(requests.length, beforeClock, "Direct clock questions require no model call and cannot use stale archive dates");
+  const geminiRequests = [];
+  ai.getClient = () => ({ models: { generateContent: async (body) => { geminiRequests.push(body); return { text: "Gemini answer" }; } } });
+  await ai.respond({ ...args, provider: "gemini", apiKey: "fake-gemini", text: "What are the rules?", knowledgePolicy: { knowledgeOnly: true, requireCitations: true, citationCount: 2 } });
+  assert.ok(geminiRequests[0].config.systemInstruction.includes("Trusted runtime clock:"));
+  assert.ok(geminiRequests[0].config.systemInstruction.includes("Knowledge-only mode"));
+  assert.ok(geminiRequests[0].config.systemInstruction.includes("up to 2"));
   console.log("AI provider storage and OpenAI chat checks passed.");
 }
 

@@ -97,7 +97,12 @@ async function main() {
   live.set(guidance.id, guidance); store.upsert(guidance);
   const guidanceRow = store.search("portraits", guildId, 5, [threadId])[0].message;
   store.putVector(guidanceRow, modelFor("openai"), vector);
-  const retrievalAi = { generate: async () => "portraits lens fifty millimeter" };
+  const retrievalAi = { generate: async (args) => {
+    if (!args.instructions.includes("evidence reviewer")) return "portraits lens fifty millimeter";
+    const input = JSON.parse(args.conversation[0].text);
+    const source = input.sources.find((r) => r.content === guidance.content);
+    return JSON.stringify({ kind: "grounded", supported: true, answer: `Use a fifty millimeter lens [${source.id}]`, evidence: [{ id: source.id, quote: source.content }] });
+  } };
   const fullRetrieval = new KnowledgeRetrieval(store, indexer, retrievalAi);
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: vector }] }) });
   const prepared = await fullRetrieval.prepare({ client, guildId, channelId: otherRoot, userId, text: "what glass do i need for headshots?" });
@@ -105,6 +110,12 @@ async function main() {
   const sourceNumber = prepared.sources.findIndex((m) => m.id === guidance.id) + 1;
   const answer = await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: `Use a fifty millimeter lens [S${sourceNumber}]` });
   assert.ok(answer.includes(`/channels/${guildId}/${threadId}/${guidance.id}`));
+  const workingGenerate = retrievalAi.generate;
+  retrievalAi.generate = async () => JSON.stringify({ kind: "grounded", supported: true, answer: "Invented answer [S999]", evidence: [{ id: "S999", quote: "Invented" }] });
+  assert.ok((await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "bad draft" })).includes("couldn't verify"));
+  retrievalAi.generate = async () => { throw new Error("model timeout"); };
+  assert.ok((await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "unchecked draft" })).includes("couldn't verify"));
+  retrievalAi.generate = workingGenerate;
   root.permissionOverwrites = privateRoot.permissionOverwrites;
   const withheld = await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "Private information" });
   assert.ok(withheld.includes("permissions changed"), "Revoked audience access withholds the generated answer");
