@@ -5,6 +5,15 @@ export const initialOpenAiModels = [
   "gpt-6-luna", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 ];
 
+export function reasoningEffortsForModel(model) {
+  if (model === "gpt-5.5-pro") return ["medium", "high", "xhigh"];
+  const values = ["low", "medium", "high"];
+  if (["gpt-5.5", "gpt-5.4-mini", "gpt-6-luna", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].includes(model)) values.unshift("none");
+  if (["gpt-5.5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"].includes(model)) values.push("xhigh");
+  if (["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"].includes(model)) values.push("max");
+  return values;
+}
+
 function isFutureTextModel(id) {
   const match = /^gpt-(\d+)(?:\.(\d+))?(?:-([a-z]+))?$/.exec(id);
   if (!match) return false;

@@ -86,11 +86,17 @@ function setupMobileNavigationHint() {
 function closeDestinationMenu() { $("#destination-list").hidden = true; $("#destination-trigger").setAttribute("aria-expanded", "false"); $("#destination-trigger").classList.remove("open"); }
 function closeAiProviderMenu() { $("#ai-provider-options").hidden = true; $("#ai-provider-trigger").setAttribute("aria-expanded", "false"); $("#ai-provider-trigger").classList.remove("open"); }
 function closeOpenAiModelMenu() { $("#openai-model-options").hidden = true; $("#openai-model-trigger").setAttribute("aria-expanded", "false"); $("#openai-model-trigger").classList.remove("open"); }
-function selectOpenAiModel(model) { $("#openai-model").value = model; $("#openai-model-label").textContent = model; document.querySelectorAll("#openai-model-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.model === model))); closeOpenAiModelMenu(); }
+let openAiReasoningEfforts = {};
+const openAiReasoningLabels = { auto: "Current bot default", none: "None", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Maximum" };
+const openAiSpeedLabels = { auto: "Project default", default: "Standard", fast: "Fast (higher cost)" };
+function closeOpenAiOptionMenu(kind) { const menu = $(`#openai-${kind}-options`); const trigger = $(`#openai-${kind}-trigger`); menu.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.classList.remove("open"); }
+function selectOpenAiOption(kind, value) { const labels = kind === "speed" ? openAiSpeedLabels : openAiReasoningLabels; if (!labels[value]) value = "auto"; $(`#openai-${kind}`).value = value; $(`#openai-${kind}-label`).textContent = labels[value]; document.querySelectorAll(`#openai-${kind}-options .select-option`).forEach((option) => option.setAttribute("aria-selected", String(option.dataset.value === value))); closeOpenAiOptionMenu(kind); }
+function renderReasoningOptions(model) { const list = $("#openai-reasoning-options"); const choices = ["auto", ...(openAiReasoningEfforts?.[model] || ["low", "medium", "high"])]; list.replaceChildren(...choices.map((value) => { const option = document.createElement("button"); option.type = "button"; option.className = "select-option"; option.setAttribute("role", "option"); option.dataset.value = value; option.textContent = openAiReasoningLabels[value]; option.onclick = () => { selectOpenAiOption("reasoning", value); $("#openai-reasoning-trigger").focus(); }; return option; })); if (!choices.includes($("#openai-reasoning").value)) selectOpenAiOption("reasoning", "auto"); else selectOpenAiOption("reasoning", $("#openai-reasoning").value); }
+function selectOpenAiModel(model) { $("#openai-model").value = model; $("#openai-model-label").textContent = model; document.querySelectorAll("#openai-model-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.model === model))); renderReasoningOptions(model); closeOpenAiModelMenu(); }
 async function loadOpenAiModels(guildId, currentModel) {
   const list = $("#openai-model-options");
   let models;
-  try { ({ models } = await api(`/api/guild/${guildId}/openai-model`)); }
+  try { ({ models, reasoningEfforts: openAiReasoningEfforts } = await api(`/api/guild/${guildId}/openai-model`)); }
   catch { models = [currentModel || "gpt-6-luna"]; }
   if (guildId !== selected) return;
   if (!models.includes(currentModel)) models = [currentModel, ...models];
@@ -322,6 +328,8 @@ async function loadSettings() {
   renderGeminiKeyStatus(data);
   renderOpenAiKeyStatus(data);
   selectAiProvider(settings.aiProvider);
+  selectOpenAiOption("speed", settings.openAiSpeed || "auto");
+  selectOpenAiOption("reasoning", settings.openAiReasoning || "auto");
   loadOpenAiModels(guildId, settings.openAiModel || "gpt-6-luna");
   setPersonalityLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels((data.channels || []).filter((channel) => [0, 5].includes(channel.type)));
@@ -450,6 +458,7 @@ $("#personality-form").onsubmit = async (event) => { event.preventDefault(); awa
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 $("#openai-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); await loadSettings(); toast(result.message || "OpenAI key verified and saved."); } catch (error) { toast(error.message || "That OpenAI key could not be verified."); } };
 $("#openai-model-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai-model`, { method: "PUT", body: JSON.stringify({ model: $("#openai-model").value }) }); await loadSettings(); toast(result.message || "OpenAI model updated."); } catch (error) { toast(error.message || "Could not change the OpenAI model."); } };
+$("#openai-options-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai-options`, { method: "PUT", body: JSON.stringify({ speed: $("#openai-speed").value, reasoning: $("#openai-reasoning").value }) }); await loadSettings(); toast(result.message || "OpenAI settings updated."); } catch (error) { toast(error.message || "Could not update OpenAI settings."); } };
 $("#provider-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/ai-provider`, { method: "PUT", body: JSON.stringify({ provider: $("#ai-provider").value }) }); await loadSettings(); toast(result.message || "AI provider updated."); } catch (error) { await loadSettings(); toast(error.message || "Could not change the AI provider."); } };
 document.querySelectorAll("[data-profile-field]").forEach((form) => {
   form.onsubmit = async (event) => {
@@ -536,12 +545,14 @@ $("#announcement-modal-form").onsubmit = async (event) => {
 $("#destination-trigger").onclick = () => { const list = $("#destination-list"); const opening = list.hidden; list.hidden = !opening; $("#destination-trigger").setAttribute("aria-expanded", String(opening)); $("#destination-trigger").classList.toggle("open", opening); };
 $("#ai-provider-trigger").onclick = () => { const list = $("#ai-provider-options"); const opening = list.hidden; list.hidden = !opening; $("#ai-provider-trigger").setAttribute("aria-expanded", String(opening)); $("#ai-provider-trigger").classList.toggle("open", opening); };
 $("#openai-model-trigger").onclick = () => { const list = $("#openai-model-options"); const opening = list.hidden; list.hidden = !opening; $("#openai-model-trigger").setAttribute("aria-expanded", String(opening)); $("#openai-model-trigger").classList.toggle("open", opening); };
+for (const kind of ["speed", "reasoning"]) { $(`#openai-${kind}-trigger`).onclick = () => { const list = $(`#openai-${kind}-options`); const opening = list.hidden; list.hidden = !opening; $(`#openai-${kind}-trigger`).setAttribute("aria-expanded", String(opening)); $(`#openai-${kind}-trigger`).classList.toggle("open", opening); }; }
+document.querySelectorAll("#openai-speed-options .select-option").forEach((option) => { option.onclick = () => { selectOpenAiOption("speed", option.dataset.value); $("#openai-speed-trigger").focus(); }; });
 document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => { option.onclick = () => { selectAiProvider(option.dataset.provider); $("#ai-provider-trigger").focus(); }; });
 $("#bot-channel-trigger").onclick = () => toggleBotAccessMenu("channels");
 $("#bot-auto-trigger").onclick = () => toggleBotAccessMenu("auto");
 $("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
-document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest("#openai-model-select")) closeOpenAiModelMenu(); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
+document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest("#openai-model-select")) closeOpenAiModelMenu(); for (const kind of ["speed", "reasoning"]) if (!event.target.closest(`#openai-${kind}-select`)) closeOpenAiOptionMenu(kind); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); for (const kind of ["speed", "reasoning"]) closeOpenAiOptionMenu(kind); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
 setupMobileNavigationHint();
 setupKnowledge();

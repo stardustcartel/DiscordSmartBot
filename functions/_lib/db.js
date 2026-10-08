@@ -3,6 +3,8 @@ const defaultSettings = {
   personality: "You are a helpful, friendly Discord assistant.",
   aiProvider: "gemini",
   openAiModel: "gpt-6-luna",
+  openAiSpeed: "auto",
+  openAiReasoning: "auto",
   knowledgeChannelIds: [],
   botResponseChannelIds: [],
   botAutoResponseChannelIds: [],

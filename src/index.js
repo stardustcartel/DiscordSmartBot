@@ -380,6 +380,8 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
     apiKey,
     provider,
     model: settings.openAiModel,
+    openAiSpeed: settings.openAiSpeed,
+    openAiReasoning: settings.openAiReasoning,
     scopeId: guildId || "direct-messages",
     userId,
     text,

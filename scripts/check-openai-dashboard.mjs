@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { onRequestPut as saveOpenAiKey } from "../functions/api/guild/[guildId]/openai.js";
 import { onRequestPut as selectProvider } from "../functions/api/guild/[guildId]/ai-provider.js";
 import { onRequestGet as listModels, onRequestPut as saveModel } from "../functions/api/guild/[guildId]/openai-model.js";
+import { onRequestPut as saveOptions } from "../functions/api/guild/[guildId]/openai-options.js";
 import { seal } from "../functions/_lib/auth.js";
 
 const guildId = "1545533279766319215";
@@ -83,6 +84,17 @@ try {
   response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-6.2-luna" }) });
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(env.DB.row.settings_json).openAiModel, "gpt-6.2-luna");
+  response = await saveOptions({ env, params: { guildId }, request: requestFor("openai-options", { speed: "fast", reasoning: "medium" }) });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(env.DB.row.settings_json).openAiSpeed, "fast");
+  assert.equal(JSON.parse(env.DB.row.settings_json).openAiReasoning, "medium");
+  response = await saveOptions({ env, params: { guildId }, request: requestFor("openai-options", { speed: "fast", reasoning: "none" }) });
+  assert.equal(response.status, 400, "Unknown future models cannot use unverified reasoning levels");
+  response = await saveModel({ env, params: { guildId }, request: requestFor("openai-model", { model: "gpt-5.5-pro" }) });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(env.DB.row.settings_json).openAiReasoning, "medium");
+  response = await saveOptions({ env, params: { guildId }, request: requestFor("openai-options", { speed: "default", reasoning: "none" }) });
+  assert.equal(response.status, 400, "Pro model does not support no reasoning");
   console.log("OpenAI dashboard encryption, key history, and provider selection checks passed.");
 } finally {
   globalThis.fetch = originalFetch;

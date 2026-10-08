@@ -1,12 +1,13 @@
 import { json } from "../../../_lib/auth.js";
 import { authorizedGuild } from "../../../_lib/authorize.js";
 import { createStateIfMissing, mutateState } from "../../../_lib/db.js";
-import { availableOpenAiModels } from "../../../_lib/openai-models.js";
+import { availableOpenAiModels, reasoningEffortsForModel } from "../../../_lib/openai-models.js";
 
 export async function onRequestGet({ env, request, params }) {
   if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
   const state = await createStateIfMissing(env.DB, params.guildId);
-  return json({ models: await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY) }, 200, { "Cache-Control": "no-store" });
+  const models = await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY);
+  return json({ models, reasoningEfforts: Object.fromEntries(models.map((model) => [model, reasoningEffortsForModel(model)])) }, 200, { "Cache-Control": "no-store" });
 }
 
 export async function onRequestPut({ env, request, params }) {
@@ -18,6 +19,6 @@ export async function onRequestPut({ env, request, params }) {
   if (!state.openaiSecret) return json({ error: "Add an OpenAI API key before choosing a model." }, 400);
   const models = await availableOpenAiModels(state.openaiSecret, env.GUILD_SECRETS_KEY);
   if (!models.includes(model)) return json({ error: "Choose a model from the available list." }, 400);
-  await mutateState(env.DB, params.guildId, (current) => ({ ...current, settings: { ...current.settings, openAiModel: model } }));
+  await mutateState(env.DB, params.guildId, (current) => ({ ...current, settings: { ...current.settings, openAiModel: model, openAiReasoning: current.settings.openAiReasoning === "auto" || reasoningEffortsForModel(model).includes(current.settings.openAiReasoning) ? current.settings.openAiReasoning : "auto" } }));
   return json({ model, message: `${model} is now this server's OpenAI model.` });
 }

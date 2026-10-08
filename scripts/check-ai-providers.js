@@ -61,6 +61,13 @@ async function main() {
   assert.equal(requests[2].body.reasoning.effort, "low");
   await ai.respond({ ...args, model: "gpt-5.5-pro", text: "Try Pro" });
   assert.equal(requests[3].body.reasoning.effort, "high");
+  await ai.respond({ ...args, model: "gpt-6-astra", openAiSpeed: "fast", openAiReasoning: "high", text: "Fast and deep" });
+  assert.equal(requests[4].body.service_tier, "fast");
+  assert.equal(requests[4].body.reasoning.effort, "high");
+  assert.ok(requests[4].body.max_output_tokens >= 6000);
+  await ai.respond({ ...args, model: "gpt-5.5-pro", openAiSpeed: "default", openAiReasoning: "none", text: "Invalid effort fallback" });
+  assert.equal(requests[5].body.service_tier, "default");
+  assert.equal(requests[5].body.reasoning.effort, "high");
   console.log("AI provider storage and OpenAI chat checks passed.");
 }
 
