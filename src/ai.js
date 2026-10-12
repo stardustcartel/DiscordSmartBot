@@ -95,7 +95,7 @@ class AiChat {
     return responseText;
   }
 
-  async generate({ apiKey, provider, model, openAiSpeed = "auto", openAiReasoning = "auto", scopeId, instructions, conversation, maxOutputTokens = 1200, timeoutMs }) {
+  async generate({ apiKey, provider, model, openAiSpeed = "auto", openAiReasoning = "auto", scopeId, instructions, conversation, maxOutputTokens = 1200, timeoutMs, textFormat }) {
     instructions = String(instructions || "") + "\n\n" + trustedClock();
     if (provider === "openai") {
       const selectedModel = model || this.config.openAiModel || "gpt-6-luna";
@@ -114,12 +114,23 @@ class AiChat {
           reasoning: { effort: reasoningEffort },
           max_output_tokens: Math.max(maxOutputTokens, tokenFloor, selectedModel === "gpt-5.5-pro" ? 4000 : 0),
           ...(serviceTier ? { service_tier: serviceTier } : {}),
+          ...(textFormat ? { text: { format: textFormat } } : {}),
           store: false,
         }),
         signal: AbortSignal.timeout(timeoutMs || (selectedModel === "gpt-5.5-pro" || ["high", "xhigh", "max"].includes(reasoningEffort) ? 180000 : reasoningEffort === "medium" ? 90000 : 45000)),
       });
       if (!response.ok) throw new Error(`OpenAI returned HTTP ${response.status}.`);
       const result = await response.json();
+      if (result.status === "incomplete" || result.status === "failed") {
+        const error = new Error("OpenAI did not complete the response.");
+        error.code = result.status === "incomplete" ? "AI_OUTPUT_INCOMPLETE" : "AI_OUTPUT_FAILED";
+        throw error;
+      }
+      if (result.output?.some((item) => item.content?.some((part) => part.type === "refusal"))) {
+        const error = new Error("OpenAI declined the response.");
+        error.code = "AI_OUTPUT_REFUSAL";
+        throw error;
+      }
       if (scopeId && /^\d{15,25}$/.test(scopeId) && typeof result.service_tier === "string") {
         this.serviceTiers.set(scopeId, { model: selectedModel, serviceTier: result.service_tier, requestedSpeed: openAiSpeed, observedAt: Date.now() });
       }

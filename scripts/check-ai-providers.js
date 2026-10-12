@@ -74,6 +74,17 @@ async function main() {
   const clockAnswer = await ai.respond({ ...args, text: "What is the current date/time?" });
   assert.ok(clockAnswer.includes("UTC"));
   assert.equal(requests.length, beforeClock, "Direct clock questions require no model call and cannot use stale archive dates");
+  const { evidenceReviewFormat } = require("../src/knowledge-policy");
+  await ai.generate({ ...args, instructions: "Review", conversation: [{ role: "user", text: "Draft" }], textFormat: evidenceReviewFormat });
+  assert.deepEqual(requests.at(-1).body.text.format, evidenceReviewFormat);
+  for (const [result, code] of [
+    [{ status: "incomplete", output_text: "Partial answer", incomplete_details: { reason: "max_output_tokens" } }, "AI_OUTPUT_INCOMPLETE"],
+    [{ status: "failed" }, "AI_OUTPUT_FAILED"],
+    [{ status: "completed", output: [{ content: [{ type: "refusal", refusal: "No" }] }] }, "AI_OUTPUT_REFUSAL"],
+  ]) {
+    globalThis.fetch = async () => ({ ok: true, json: async () => result });
+    await assert.rejects(ai.generate({ ...args, conversation: [] }), (error) => error.code === code, "Incomplete/refused output must not reach evidence validation as ordinary text");
+  }
   const geminiRequests = [];
   ai.getClient = () => ({ models: { generateContent: async (body) => { geminiRequests.push(body); return { text: "Gemini answer" }; } } });
   await ai.respond({ ...args, provider: "gemini", apiKey: "fake-gemini", text: "What are the rules?", knowledgePolicy: { knowledgeOnly: true, requireCitations: true, citationCount: 2 } });

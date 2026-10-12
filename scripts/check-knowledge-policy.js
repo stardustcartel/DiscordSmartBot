@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { normalizePolicy, effectivePolicy, trustedClock, directClockAnswer, evidenceInstructions, validateEvidenceReview } = require("../src/knowledge-policy");
+const { normalizePolicy, effectivePolicy, trustedClock, directClockAnswer, evidenceInstructions, validateEvidenceReview, inspectEvidenceReview, reviewInstructions, evidenceReviewFormat } = require("../src/knowledge-policy");
 const { GuildSettingsStore } = require("../src/guild-settings");
 const forum = "100000000000000001", thread = "100000000000000002", other = "100000000000000003";
 const defaults = normalizePolicy();
@@ -34,6 +34,13 @@ assert.equal(validateEvidenceReview({ ...review, answer: "No citation" }, record
 assert.equal(validateEvidenceReview({ ...review, kind: "general", answer: "General advice" }, records, policy), null, "General knowledge forbidden in strict mode");
 assert.ok(validateEvidenceReview({ ...review, kind: "general", answer: "General advice" }, records, { ...policy, knowledgeOnly: false }).startsWith("General information"));
 assert.equal(validateEvidenceReview({ kind: "abstain", supported: true, answer: "I cannot verify that." }, [], policy), "I cannot verify that.");
+const disclaimer = { kind: "abstain", supported: true, answer: "I cannot give legal advice. Please consult a qualified professional. What are your goals?", evidence: [] };
+assert.equal(validateEvidenceReview(disclaimer, [], policy), disclaimer.answer, "Disclaimers and focused questions are valid even in strict mode without records");
+assert.equal(inspectEvidenceReview({ ...disclaimer, supported: false }, [], policy).reason, "corrected_answer_not_approved", "Do not silently accept a rejected review; request repair");
+const reviewPrompt = reviewInstructions(policy, "Keep the professional-advice disclaimer.");
+assert.ok(reviewPrompt.includes("Keep the professional-advice disclaimer.") && reviewPrompt.includes("examples and factual assertions are NOT evidence"));
+assert.ok(reviewPrompt.includes("YOUR CORRECTED ANSWER") && reviewPrompt.includes("No general-knowledge answers"));
+assert.equal(evidenceReviewFormat.strict, true);
 const manyRecords = Array.from({ length: 3 }, (_, i) => ({ id: `S${i + 1}`, content: `Evidence number ${i + 1}` }));
 assert.equal(validateEvidenceReview({ kind: "grounded", supported: true, answer: "Answer [S1] [S2] [S3]", evidence: manyRecords.map((r) => ({ id: r.id, quote: r.content })) }, manyRecords, policy), null, "Citation cap enforced");
 const store = Object.create(GuildSettingsStore.prototype);
