@@ -54,17 +54,21 @@ export async function validHubSignature(secret, body, header) {
 export async function maintainYouTubeSubscriptions(env) {
   if (String(env.YOUTUBE_WEBHOOK_SECRET || "").length < 32 || !env.DASHBOARD_PUBLIC_URL) return;
   await ensureSchema(env.DB);
-  const states = await env.DB.prepare("SELECT settings_json FROM guild_state").all();
-  const channels = new Set();
+  const states = await env.DB.prepare("SELECT guild_state.guild_id, guild_state.settings_json, guild_installations.name AS guild_name FROM guild_state LEFT JOIN guild_installations ON guild_installations.guild_id=guild_state.guild_id").all();
+  const channels = new Map();
   for (const row of states.results || []) {
     let settings;
     try { settings = JSON.parse(row.settings_json); } catch { continue; }
     for (const subscription of settings.youtubeSubscriptions || []) {
-      if (validChannel.test(subscription.youtubeChannelId)) channels.add(subscription.youtubeChannelId);
+      if (validChannel.test(subscription.youtubeChannelId)) {
+        const subscribers = channels.get(subscription.youtubeChannelId) || [];
+        subscribers.push(`server=${row.guild_name || "unknown"} (${row.guild_id}) youtube=${subscription.sourceName || "unknown"} (${subscription.youtubeChannelId}) destination=${subscription.destinationChannelId}`);
+        channels.set(subscription.youtubeChannelId, subscribers);
+      }
     }
   }
   const now = Date.now();
-  for (const channelId of channels) {
+  for (const [channelId, subscribers] of channels) {
     await env.DB.prepare("INSERT OR IGNORE INTO youtube_push_topics (channel_id,created_at) VALUES (?,?)").bind(channelId, now).run();
     const topic = await env.DB.prepare("SELECT requested_at,lease_expires_at FROM youtube_push_topics WHERE channel_id=?").bind(channelId).first();
     if (Number(topic?.requested_at || 0) > now - 10 * 60_000 || Number(topic?.lease_expires_at || 0) > now + 24 * 60 * 60_000) continue;
@@ -77,7 +81,7 @@ export async function maintainYouTubeSubscriptions(env) {
       const response = await fetch(HUB, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10_000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
-      console.warn(`YouTube subscription request failed for ${channelId}: ${error.message}`);
+      console.warn(`YouTube subscription request failed: ${subscribers.join("; ")} error=${error.message}`);
       await env.DB.prepare("UPDATE youtube_push_topics SET requested_at=0 WHERE channel_id=?").bind(channelId).run();
     }
   }
@@ -87,7 +91,7 @@ export async function deliverYouTubePush(env, entry) {
   await ensureSchema(env.DB);
   const topic = await env.DB.prepare("SELECT created_at,lease_expires_at FROM youtube_push_topics WHERE channel_id=?").bind(entry.channelId).first();
   if (!topic || Number(topic.lease_expires_at) < Date.now()) return;
-  const states = await env.DB.prepare("SELECT guild_id,settings_json FROM guild_state").all();
+  const states = await env.DB.prepare("SELECT guild_state.guild_id, guild_state.settings_json, guild_installations.name AS guild_name FROM guild_state LEFT JOIN guild_installations ON guild_installations.guild_id=guild_state.guild_id").all();
   let failed = false;
   for (const row of states.results || []) {
     let settings;
@@ -95,15 +99,21 @@ export async function deliverYouTubePush(env, entry) {
     for (const sub of settings.youtubeSubscriptions || []) {
       if (sub.youtubeChannelId !== entry.channelId || !/^\d{15,25}$/.test(sub.destinationChannelId || "")) continue;
       if (sub.lastVideoId === entry.videoId) continue;
+      const detail = `server=${row.guild_name || "unknown"} (${row.guild_id}) youtube=${sub.sourceName || entry.channelName || "unknown"} (${entry.channelId}) destination=${sub.destinationChannelId} video=${entry.videoId} method=webhook`;
       const claim = await env.DB.prepare("INSERT OR IGNORE INTO youtube_push_deliveries (guild_id,destination_id,channel_id,video_id) VALUES (?,?,?,?)").bind(row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId).run();
       if (!claim.meta?.changes) continue;
       const template = String(sub.announcementTemplate || TEMPLATE).replaceAll("{channel}", entry.channelName || sub.sourceName || "YouTube channel").replaceAll("{title}", entry.title || "New video").trim();
       const url = `https://www.youtube.com/watch?v=${entry.videoId}`;
       const content = `${template.slice(0, 2000 - url.length - 1)}\n${url}`;
+      let posted = false;
+      let messageId = "unknown";
       try {
         if (!env.DISCORD_BOT_TOKEN) throw new Error("Discord bot token missing");
         const response = await fetch(`https://discord.com/api/v10/channels/${sub.destinationChannelId}/messages`, { method: "POST", headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }) });
         if (!response.ok) throw new Error(`Discord HTTP ${response.status}`);
+        posted = true;
+        messageId = (await response.json()).id || "unknown";
+        console.info(`YouTube announcement posted: ${detail} message=${messageId}`);
         await env.DB.prepare("UPDATE youtube_push_deliveries SET sent_at=? WHERE guild_id=? AND destination_id=? AND channel_id=? AND video_id=?").bind(Date.now(), row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId).run();
         const current = await getState(env.DB, row.guild_id);
         if (current) {
@@ -111,9 +121,13 @@ export async function deliverYouTubePush(env, entry) {
           await writeState(env.DB, row.guild_id, { ...current.settings, youtubeSubscriptions }, current.geminiSecret, current.openaiSecret, "youtube-push");
         }
       } catch (error) {
-        failed = true;
-        console.warn(`YouTube push delivery failed for ${row.guild_id}/${sub.destinationChannelId}: ${error.message}`);
-        await env.DB.prepare("DELETE FROM youtube_push_deliveries WHERE guild_id=? AND destination_id=? AND channel_id=? AND video_id=? AND sent_at=0").bind(row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId).run();
+        if (posted) {
+          console.warn(`YouTube announcement posted but tracking failed: ${detail} message=${messageId} error=${error.message}`);
+        } else {
+          failed = true;
+          console.warn(`YouTube announcement failed: ${detail} error=${error.message}`);
+          await env.DB.prepare("DELETE FROM youtube_push_deliveries WHERE guild_id=? AND destination_id=? AND channel_id=? AND video_id=? AND sent_at=0").bind(row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId).run();
+        }
       }
     }
   }

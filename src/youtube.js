@@ -108,11 +108,12 @@ class YouTubeNotifier {
       const subscriptions = this.guildSettings.listYouTubeSubscriptions();
       const feeds = new Map();
       for (const subscription of subscriptions) {
+        const context = `server=${client.guilds.cache.get(subscription.guildId)?.name || "unknown"} (${subscription.guildId}) youtube=${subscription.sourceName || "unknown"} (${subscription.youtubeChannelId}) destination=${subscription.destinationChannelId}`;
         if (!feeds.has(subscription.youtubeChannelId)) {
           try {
             feeds.set(subscription.youtubeChannelId, await fetchYouTubeFeed(subscription.youtubeChannelId));
           } catch (error) {
-            console.warn("YouTube feed poll failed for " + subscription.youtubeChannelId + ": " + error.message);
+            console.warn(`YouTube feed poll failed: ${context} error=${error.message}`);
           }
         }
         const feed = feeds.get(subscription.youtubeChannelId);
@@ -127,20 +128,33 @@ class YouTubeNotifier {
         let channel;
         try {
           channel = await client.channels.fetch(subscription.destinationChannelId);
-        } catch {
+        } catch (error) {
+          console.warn(`YouTube announcement destination failed: ${context} error=${error.message}`);
           continue;
         }
-        if (!channel?.isTextBased()) continue;
-        for (const entry of newEntries) {
-          await channel.send({
-            content: announcementContent(subscription, feed, entry),
-            allowedMentions: { parse: [] },
-          });
+        if (!channel?.isTextBased()) {
+          console.warn(`YouTube announcement destination failed: ${context} error=Channel is not text-based`);
+          continue;
         }
+        let lastSent;
+        for (const entry of newEntries) {
+          try {
+            const message = await channel.send({
+              content: announcementContent(subscription, feed, entry),
+              allowedMentions: { parse: [] },
+            });
+            lastSent = entry;
+            console.info(`YouTube announcement posted: ${context} video=${entry.id} message=${message.id} method=poll`);
+          } catch (error) {
+            console.warn(`YouTube announcement failed: ${context} video=${entry.id} method=poll error=${error.message}`);
+            break;
+          }
+        }
+        if (!lastSent) continue;
         this.guildSettings.addYouTubeSubscription(subscription.guildId, {
           ...subscription,
           sourceName: feed.name || subscription.sourceName,
-          lastVideoId: feed.entries[0].id,
+          lastVideoId: lastSent.id,
           lastVideoUpdatedAt: Date.now(),
         });
       }
