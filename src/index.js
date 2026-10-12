@@ -48,7 +48,7 @@ const guildSecrets = new GuildSecretsStore(config);
 const ai = new AiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
 const knowledgeIndexer = new KnowledgeIndexer(knowledge, guildSettings, guildSecrets);
-const knowledgeRetrieval = new KnowledgeRetrieval(knowledge, knowledgeIndexer, ai);
+const knowledgeRetrieval = new KnowledgeRetrieval(knowledge, knowledgeIndexer, ai, config.dataDirectory);
 const reminders = new ReminderStore({
   ...config,
   reminderDefaultTimeZone: config.defaultReminderTimeZone,
