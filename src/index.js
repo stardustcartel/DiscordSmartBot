@@ -383,7 +383,10 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
     prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId });
-    if (policy.knowledgeOnly && !prepared.sources.length) return simpleGreeting(text) ? "Hi! What would you like to know about this server?" : insufficientEvidence;
+    if (policy.knowledgeOnly && !prepared.sources.length) {
+      if (["relevance_review_unavailable", "selected_sources_unavailable_on_live_check"].includes(prepared.searchOutcome)) return "I couldn't complete the knowledge search right now. Please try again in a moment.";
+      return simpleGreeting(text) ? "Hi! What would you like to know about this server?" : insufficientEvidence;
+    }
   }
   const response = await ai.respond({
     apiKey,

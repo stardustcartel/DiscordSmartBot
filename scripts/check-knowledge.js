@@ -98,7 +98,8 @@ async function main() {
   const guidanceRow = store.search("portraits", guildId, 5, [threadId])[0].message;
   store.putVector(guidanceRow, modelFor("openai"), vector);
   const retrievalAi = { generate: async (args) => {
-    if (!args.instructions.includes("evidence reviewer")) return "portraits lens fifty millimeter";
+    if (args.textFormat?.name === "knowledge_search_plan") return JSON.stringify({ concepts: ["portraits", "lens"], queries: [{ query: "portraits lens", channelIds: [], offset: 0 }] });
+    if (args.textFormat?.name === "knowledge_search_review") return JSON.stringify({ sufficient: true, explanation: "Lens recommendation", selections: [{ id: guidance.id, reason: "Supplies a lens recommendation" }], queries: [] });
     const input = JSON.parse(args.conversation[0].text);
     const source = input.sources.find((r) => r.content === guidance.content);
     return JSON.stringify({ kind: "grounded", supported: true, answer: `Use a fifty millimeter lens [${source.id}]`, evidence: [{ id: source.id, quote: source.content }] });
@@ -109,9 +110,10 @@ async function main() {
   const tracePath = path.join(directory, "knowledge-search", guildId, "history.jsonl");
   const trace = JSON.parse(fs.readFileSync(tracePath, "utf8").trim());
   assert.equal(trace.status, "complete");
-  assert.equal(trace.firstKeywordSearch.query, "what glass do i need for headshots?");
-  assert.equal(trace.rewrite.query, "portraits lens fifty millimeter");
-  assert.ok(trace.rewrite.addedSearchTerms.includes("portraits"));
+  assert.equal(trace.question, "what glass do i need for headshots?");
+  assert.equal(trace.searchPlan.queries[0].query, "portraits lens");
+  assert.ok(trace.searchRounds[0].searches[0].totalMatches >= 1);
+  assert.ok(trace.searchRounds[0].review.selections.some((selection) => selection.id === guidance.id));
   assert.equal(trace.embeddingSearch.dimensions, 768);
   assert.equal(trace.embeddingSearch.vector.length, 768);
   assert.ok(trace.embeddingSearch.matches.some((match) => match.messageId === guidance.id));
