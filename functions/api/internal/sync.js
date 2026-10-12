@@ -1,5 +1,6 @@
 import { json } from "../../_lib/auth.js";
 import { getState, registerInstallations, statesForGuilds, writeState } from "../../_lib/db.js";
+import { ensureAuditBaseline } from "../../_lib/settings-audit.js";
 import { maintainYouTubeSubscriptions } from "../../_lib/youtube-push.js";
 
 function authorized(request, env) {
@@ -74,11 +75,21 @@ export async function onRequestPost({ env, request, context }) {
   }
   const knownVersions = body.knownVersions && typeof body.knownVersions === "object" ? body.knownVersions : {};
   const states = (await statesForGuilds(env.DB, installedIds)).filter((state) => state.version > Number(knownVersions[state.guildId] || 0));
+  const knownAuditIds = body.knownAuditIds && typeof body.knownAuditIds === "object" ? body.knownAuditIds : {};
+  const auditEvents = [];
+  for (const guildId of installedIds) {
+    const state = await getState(env.DB, guildId);
+    if (!state) continue;
+    await ensureAuditBaseline(env.DB, state);
+    const cursor = Number(knownAuditIds[guildId] || 0);
+    const rows = await env.DB.prepare("SELECT id, guild_id, action, actor_id, source, created_at, snapshot_json FROM guild_settings_audit WHERE guild_id = ? AND id > ? ORDER BY id LIMIT 100").bind(guildId, Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0).all();
+    auditEvents.push(...(rows.results || []));
+  }
   const checkpointRows = await env.DB.prepare("SELECT guild_id,destination_id,channel_id,video_id,sent_at FROM youtube_push_deliveries WHERE sent_at>0 ORDER BY sent_at DESC LIMIT 1000").all();
   const youtubeCheckpoints = (checkpointRows.results || []).filter((row) => installedIds.includes(row.guild_id));
   if (String(env.YOUTUBE_WEBHOOK_SECRET || "").length >= 32) {
     const task = maintainYouTubeSubscriptions(env).catch((error) => console.warn("YouTube subscription maintenance failed:", error.message));
     if (context?.waitUntil) context.waitUntil(task); else await task;
   }
-  return json({ states, youtubeCheckpoints, syncedAt: Date.now() });
+  return json({ states, auditEvents, youtubeCheckpoints, syncedAt: Date.now() });
 }

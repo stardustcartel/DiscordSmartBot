@@ -49,7 +49,7 @@ export async function onRequestGet({ env, request, params }) {
     ? cdnAsset(`guilds/${params.guildId}/users/${memberId}/avatars`, discordMember.avatar, 256)
     : cdnAsset(`avatars/${memberId}`, memberUser.avatar, 256);
   const discordBannerUrl = cdnAsset(`guilds/${params.guildId}/users/${memberId}/banners`, discordMember?.banner, 512);
-  const preferStoredAssets = state.updatedBy === "dashboard";
+  const preferStoredAssets = state.updatedBy === "dashboard" || /^\d{15,25}$/.test(String(state.updatedBy || ""));
   settings.profile.avatarUrl = preferStoredAssets ? storedAvatarUrl || discordAvatarUrl : discordAvatarUrl || storedAvatarUrl;
   settings.profile.bannerUrl = preferStoredAssets ? storedBannerUrl || discordBannerUrl : discordBannerUrl || storedBannerUrl;
   settings.profile.avatarUrls = [...new Set([settings.profile.avatarUrl, discordAvatarUrl, storedAvatarUrl].filter(Boolean))];

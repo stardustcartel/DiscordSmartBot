@@ -5,6 +5,7 @@ import { onRequestGet as me } from "../functions/api/me.js";
 import { onRequestGet as permissions, onRequestPost as grant, onRequestDelete as revoke } from "../functions/api/guild/[guildId]/permissions.js";
 import { seal, unseal } from "../functions/_lib/auth.js";
 import { authorizedGuild } from "../functions/_lib/authorize.js";
+import { defaults } from "../functions/_lib/db.js";
 
 const guildId = "1545533279766319215";
 const managerId = "100000000000000001";
@@ -22,11 +23,15 @@ const env = {
   DASHBOARD_PUBLIC_URL: origin,
   DISCORD_BOT_TOKEN: "bot-token",
   DB: {
-    async batch() { return []; },
+    async batch(statements) { for (const statement of statements) if (statement.run) await statement.run(); return []; },
     prepare(sql) {
       if (sql.startsWith("PRAGMA table_info")) return { async all() { return { results: [{ name: "openai_secret_json" }] }; } };
       return { bind(...args) {
         return {
+          async first() {
+            if (sql.startsWith("SELECT guild_id, settings_json")) return { guild_id: args[0], settings_json: JSON.stringify(defaults()), gemini_secret_json: null, openai_secret_json: null, version: 1, updated_at: Date.now(), updated_by: "bootstrap" };
+            return null;
+          },
           async all() {
             if (sql.includes("ORDER BY created_at")) return { results: grants.filter((grant) => grant.guild_id === args[0]) };
             return { results: grants.filter((grant) => grant.guild_id === args[0] && (grant.subject_id === args[1] || grant.subject_type === "role")) };

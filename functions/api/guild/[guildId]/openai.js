@@ -28,6 +28,6 @@ export async function onRequestPut({ env, request, params }) {
         previous: state.openaiSecret ? state.openaiSecret.keyHistory?.current || { at: null, byId: null, byName: null } : null,
       },
     },
-  }));
+  }), access.user.id);
   return json({ valid: true, message: "OpenAI key verified, encrypted, and saved. Select OpenAI below to use it." });
 }

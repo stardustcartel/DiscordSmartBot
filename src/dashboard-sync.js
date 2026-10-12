@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { Routes } = require("discord.js");
 const { ensureParentDirectory, readJson, writeJson } = require("./storage");
+const { SettingsAuditMirror } = require("./settings-audit");
 
 class DashboardSync {
   constructor({ config, guildSettings, guildSecrets, knowledgeIndexer, ai }) {
@@ -15,6 +16,8 @@ class DashboardSync {
     this.timer = null;
     this.statePath = path.join(config.dataDirectory, "dashboard-sync.json");
     this.state = readJson(this.statePath, { initialized: false, knownVersions: {} });
+    this.state.knownAuditIds ||= {};
+    this.auditMirror = new SettingsAuditMirror(config.dataDirectory);
     this.guildSettings.setChangeHandler((guildId) => this.pending.add(guildId));
     this.guildSecrets.setChangeHandler((guildId) => this.pending.add(guildId));
   }
@@ -74,10 +77,15 @@ class DashboardSync {
     const changedIds = [...this.pending].filter((guildId) => client.guilds.cache.has(guildId));
     changedIds.forEach((guildId) => this.pending.delete(guildId));
     try {
-      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, openAiRuntime: Object.fromEntries(this.ai?.serviceTiers || []), bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions }) });
+      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, openAiRuntime: Object.fromEntries(this.ai?.serviceTiers || []), bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions, knownAuditIds: this.state.knownAuditIds }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       const result = await response.json();
       for (const remote of result.states || []) await this.applyState(client, remote);
+      for (const event of result.auditEvents || []) {
+        if (!client.guilds.cache.has(event.guild_id)) continue;
+        this.auditMirror.save(event);
+        this.state.knownAuditIds[event.guild_id] = Math.max(Number(this.state.knownAuditIds[event.guild_id] || 0), event.id);
+      }
       const appliedCheckpoints = new Set();
       for (const checkpoint of result.youtubeCheckpoints || []) {
         if (!client.guilds.cache.has(checkpoint.guild_id)) continue;

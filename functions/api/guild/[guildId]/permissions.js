@@ -1,6 +1,7 @@
 import { json } from "../../../_lib/auth.js";
 import { authorizedGuild } from "../../../_lib/authorize.js";
-import { ensureSchema } from "../../../_lib/db.js";
+import { createStateIfMissing, ensureSchema } from "../../../_lib/db.js";
+import { auditPermissions, prepareAuditInsert, settingsAuditSnapshot } from "../../../_lib/settings-audit.js";
 
 const snowflake = /^\d{15,25}$/;
 
@@ -92,7 +93,12 @@ export async function onRequestPost(context) {
     label = member.nick || member.user?.global_name || member.user?.username || id;
   }
   await ensureSchema(env.DB);
-  await env.DB.prepare("INSERT INTO dashboard_permissions (guild_id, subject_type, subject_id, label, added_by, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(guild_id, subject_type, subject_id) DO UPDATE SET label = excluded.label").bind(params.guildId, type, id, label, access.user.id, Date.now()).run();
+  const state = await createStateIfMissing(env.DB, params.guildId);
+  const permissions = (await auditPermissions(env.DB, params.guildId)).filter((item) => item.subject_type !== type || item.subject_id !== id);
+  permissions.push({ subject_type: type, subject_id: id, label });
+  const save = env.DB.prepare("INSERT INTO dashboard_permissions (guild_id, subject_type, subject_id, label, added_by, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(guild_id, subject_type, subject_id) DO UPDATE SET label = excluded.label").bind(params.guildId, type, id, label, access.user.id, Date.now());
+  const audit = prepareAuditInsert(env.DB, params.guildId, settingsAuditSnapshot(state.settings, state.geminiSecret, state.openaiSecret, permissions), { action: "permission_granted", actorId: access.user.id });
+  await env.DB.batch([save, audit]);
   return json({ ok: true, label });
 }
 
@@ -106,6 +112,10 @@ export async function onRequestDelete(context) {
   const id = String(body.id || "");
   if (!snowflake.test(id) || (type !== "user" && type !== "role")) return json({ error: "Choose a valid permission to remove." }, 400);
   await ensureSchema(env.DB);
-  await env.DB.prepare("DELETE FROM dashboard_permissions WHERE guild_id = ? AND subject_type = ? AND subject_id = ?").bind(params.guildId, type, id).run();
+  const state = await createStateIfMissing(env.DB, params.guildId);
+  const permissions = (await auditPermissions(env.DB, params.guildId)).filter((item) => item.subject_type !== type || item.subject_id !== id);
+  const remove = env.DB.prepare("DELETE FROM dashboard_permissions WHERE guild_id = ? AND subject_type = ? AND subject_id = ?").bind(params.guildId, type, id);
+  const audit = prepareAuditInsert(env.DB, params.guildId, settingsAuditSnapshot(state.settings, state.geminiSecret, state.openaiSecret, permissions), { action: "permission_revoked", actorId: access.user.id });
+  await env.DB.batch([remove, audit]);
   return json({ ok: true });
 }

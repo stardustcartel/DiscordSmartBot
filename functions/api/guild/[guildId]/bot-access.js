@@ -11,7 +11,8 @@ function uniqueIds(value) {
 }
 
 export async function onRequestPut({ env, request, params }) {
-  if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
+  const access = await authorizedGuild(env, request, params.guildId);
+  if (!access) return json({ error: "You do not have access to this server." }, 403);
   let body;
   try { body = await request.json(); } catch { return json({ error: "Choose the channels and roles to save." }, 400); }
   const channelIds = uniqueIds(body.channelIds);
@@ -27,6 +28,6 @@ export async function onRequestPut({ env, request, params }) {
   const channelSet = new Set((await channelResponse.json()).filter((channel) => channel.type === 0 || channel.type === 15).map((channel) => String(channel.id)));
   const roleSet = new Set((await roleResponse.json()).filter((role) => String(role.id) !== String(params.guildId) && !role.managed).map((role) => String(role.id)));
   if (channelIds.some((id) => !channelSet.has(id)) || autoChannelIds.some((id) => !channelSet.has(id) || (channelIds.length && !channelIds.includes(id))) || roleIds.some((id) => !roleSet.has(id))) return json({ error: "One of those channels or roles is no longer available or allowed." }, 400);
-  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, botResponseChannelIds: channelIds, botAutoResponseChannelIds: autoChannelIds, botAccessRoleIds: roleIds } }));
+  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, botResponseChannelIds: channelIds, botAutoResponseChannelIds: autoChannelIds, botAccessRoleIds: roleIds } }), access.user.id);
   return json({ ok: true, channelIds, autoChannelIds, roleIds });
 }

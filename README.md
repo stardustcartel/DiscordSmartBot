@@ -168,6 +168,25 @@ The bot bootstraps existing local settings into D1, keeps local JSON as an
 offline cache, sends Discord command changes to D1, and pulls dashboard changes
 back to the bot.
 
+### Per-server settings audit
+
+Each dashboard settings save is recorded in D1's `guild_settings_audit` table.
+During dashboard sync (normally about 30 seconds), Oracle mirrors the events to
+`data/settings-audit/<guild-id>/history.jsonl` and writes the latest complete
+configuration to `data/settings-audit/<guild-id>/current.json`. Personality
+instructions, AI provider/model, knowledge controls, response channels,
+YouTube templates, profile, and dashboard permissions are included. Existing
+servers receive a baseline snapshot when this feature first runs; past changes
+cannot be reconstructed. Discord-command setting changes are logged on sync,
+but automatic YouTube delivery checkpoints are not.
+
+These files contain private configuration, including full personality text, and
+are restricted to the Oracle bot account. API keys, encrypted key material,
+image bytes, and local asset paths are excluded. Key entries show only whether
+a key is configured and its saved time/actor metadata. The D1 table is created
+automatically; `migrations/0006_settings_audit.sql` is available for manual
+migration.
+
 ## OpenAI integration
 
 In the dashboard's AI integration tab, a server manager can add and verify an

@@ -11,7 +11,8 @@ function decodeImage(dataUrl) {
 }
 
 export async function onRequestPut({ env, request, params }) {
-  if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
+  const access = await authorizedGuild(env, request, params.guildId);
+  if (!access) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const profileChanges = {};
   for (const [field, limit] of [["nickname", 32], ["bio", 190]]) {
@@ -28,6 +29,6 @@ export async function onRequestPut({ env, request, params }) {
     profileChanges[`${kind}Key`] = key;
   }
   if (!Object.keys(profileChanges).length) return json({ error: "Choose a profile field to update." }, 400);
-  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, profile: { ...state.settings.profile, ...profileChanges } } }));
+  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, profile: { ...state.settings.profile, ...profileChanges } } }), access.user.id);
   return json({ ok: true });
 }

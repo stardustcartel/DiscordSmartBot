@@ -5,7 +5,8 @@ import { resolveYouTubeChannel } from "../../../_lib/youtube.js";
 import { maintainYouTubeSubscriptions } from "../../../_lib/youtube-push.js";
 
 export async function onRequestPost({ env, request, params, context }) {
-  if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
+  const access = await authorizedGuild(env, request, params.guildId);
+  if (!access) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const destinationChannelId = String(body.destinationChannelId || "");
   const announcementTemplate = String(body.announcementTemplate || "").trim().slice(0, 1500) || "📺 **{channel} uploaded a new video:**\n**{title}**";
@@ -13,7 +14,7 @@ export async function onRequestPost({ env, request, params, context }) {
   let resolved;
   try { resolved = await resolveYouTubeChannel(body.source); } catch (error) { return json({ error: error.message }, 400); }
   const subscription = { ...resolved, destinationChannelId, announcementTemplate, addedAt: Date.now() };
-  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: [...(state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== subscription.youtubeChannelId || item.destinationChannelId !== destinationChannelId), subscription] } }));
+  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: [...(state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== subscription.youtubeChannelId || item.destinationChannelId !== destinationChannelId), subscription] } }), access.user.id);
   if (String(env.YOUTUBE_WEBHOOK_SECRET || "").length >= 32) {
     const task = maintainYouTubeSubscriptions(env).catch((error) => console.warn("YouTube subscribe failed:", error.message));
     if (context?.waitUntil) context.waitUntil(task); else await task;
@@ -22,7 +23,8 @@ export async function onRequestPost({ env, request, params, context }) {
 }
 
 export async function onRequestPut({ env, request, params }) {
-  if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
+  const access = await authorizedGuild(env, request, params.guildId);
+  if (!access) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const youtubeChannelId = String(body.youtubeChannelId || "");
   const destinationChannelId = String(body.destinationChannelId || "");
@@ -41,7 +43,7 @@ export async function onRequestPut({ env, request, params }) {
       });
       if (!found) throw new Error("YouTube notification not found.");
       return { ...state, settings: { ...state.settings, youtubeSubscriptions } };
-    });
+    }, access.user.id);
   } catch (error) {
     if (error.message === "YouTube notification not found.") return json({ error: error.message }, 404);
     throw error;
@@ -50,10 +52,11 @@ export async function onRequestPut({ env, request, params }) {
 }
 
 export async function onRequestDelete({ env, request, params }) {
-  if (!(await authorizedGuild(env, request, params.guildId))) return json({ error: "You do not have access to this server." }, 403);
+  const access = await authorizedGuild(env, request, params.guildId);
+  if (!access) return json({ error: "You do not have access to this server." }, 403);
   const body = await request.json();
   const youtubeChannelId = String(body.youtubeChannelId || "");
   const destinationChannelId = String(body.destinationChannelId || "");
-  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: (state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== youtubeChannelId || (destinationChannelId && item.destinationChannelId !== destinationChannelId)) } }));
+  await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, youtubeSubscriptions: (state.settings.youtubeSubscriptions || []).filter((item) => item.youtubeChannelId !== youtubeChannelId || (destinationChannelId && item.destinationChannelId !== destinationChannelId)) } }), access.user.id);
   return json({ ok: true });
 }

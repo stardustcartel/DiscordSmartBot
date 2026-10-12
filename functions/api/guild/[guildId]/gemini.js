@@ -29,6 +29,6 @@ export async function onRequestPut({ env, request, params }) {
           : null,
       },
     },
-  }));
+  }), access.user.id);
   return json({ valid: true, message: "Gemini key verified, encrypted, and saved." });
 }

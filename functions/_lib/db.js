@@ -1,3 +1,5 @@
+import { prepareAuditInsert, settingsAuditSnapshot, auditPermissions } from "./settings-audit.js";
+
 const defaultSettings = {
   profile: { nickname: "", bio: "", avatarPath: "", bannerPath: "", avatarKey: "", bannerKey: "" },
   personality: "You are a helpful, friendly Discord assistant.",
@@ -29,6 +31,8 @@ export async function ensureSchema(db) {
     db.prepare("CREATE TABLE IF NOT EXISTS guild_state (guild_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, gemini_secret_json TEXT, version INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL DEFAULT 'bootstrap')"),
     db.prepare("CREATE TABLE IF NOT EXISTS guild_installations (guild_id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT, installed INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS dashboard_permissions (guild_id TEXT NOT NULL, subject_type TEXT NOT NULL CHECK(subject_type IN ('user','role')), subject_id TEXT NOT NULL, label TEXT NOT NULL, added_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (guild_id, subject_type, subject_id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS guild_settings_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, action TEXT NOT NULL, actor_id TEXT, source TEXT NOT NULL, created_at INTEGER NOT NULL, snapshot_json TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS guild_settings_audit_scope ON guild_settings_audit(guild_id, id)"),
   ]);
   const columns = await db.prepare("PRAGMA table_info(guild_state)").all();
   if (!(columns.results || []).some((column) => column.name === "openai_secret_json")) {
@@ -60,8 +64,21 @@ export async function createStateIfMissing(db, guildId, settings = defaults(), g
 
 export async function writeState(db, guildId, settings, geminiSecret, openaiSecret, updatedBy) {
   await ensureSchema(db);
+  const auditEnabled = updatedBy !== "youtube-push" && updatedBy !== "oracle-bootstrap";
+  const before = auditEnabled && updatedBy === "oracle" ? await getState(db, guildId) : null;
+  const grants = auditEnabled ? await auditPermissions(db, guildId) : [];
+  const snapshot = auditEnabled ? settingsAuditSnapshot(settings, geminiSecret, openaiSecret, grants) : null;
+  const changedByBot = before && JSON.stringify(settingsAuditSnapshot(before.settings, before.geminiSecret, before.openaiSecret, grants)) !== JSON.stringify(snapshot);
   const now = Date.now();
-  await db.prepare("INSERT INTO guild_state (guild_id, settings_json, gemini_secret_json, openai_secret_json, version, updated_at, updated_by) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT(guild_id) DO UPDATE SET settings_json = excluded.settings_json, gemini_secret_json = excluded.gemini_secret_json, openai_secret_json = excluded.openai_secret_json, version = guild_state.version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by").bind(guildId, JSON.stringify(settings), geminiSecret ? JSON.stringify(geminiSecret) : null, openaiSecret ? JSON.stringify(openaiSecret) : null, now, updatedBy).run();
+  const stateInsert = db.prepare("INSERT INTO guild_state (guild_id, settings_json, gemini_secret_json, openai_secret_json, version, updated_at, updated_by) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT(guild_id) DO UPDATE SET settings_json = excluded.settings_json, gemini_secret_json = excluded.gemini_secret_json, openai_secret_json = excluded.openai_secret_json, version = guild_state.version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by").bind(guildId, JSON.stringify(settings), geminiSecret ? JSON.stringify(geminiSecret) : null, openaiSecret ? JSON.stringify(openaiSecret) : null, now, updatedBy);
+  if (auditEnabled && (updatedBy !== "oracle" || !before || changedByBot)) {
+    const auditInsert = prepareAuditInsert(db, guildId, snapshot, {
+      action: updatedBy === "oracle" ? "bot_setting_saved" : "dashboard_setting_saved",
+      actorId: /^\d{15,25}$/.test(String(updatedBy)) ? String(updatedBy) : null,
+      source: updatedBy === "oracle" ? "discord-bot" : "dashboard",
+    });
+    await db.batch([stateInsert, auditInsert]);
+  } else await stateInsert.run();
   return getState(db, guildId);
 }
 

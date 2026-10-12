@@ -37,6 +37,9 @@ try {
   const version = (await getState(DB, guildId)).version;
   const response = await sync({ env, request: new Request("https://test/api/internal/sync", { method: "POST", headers: { Authorization: "Bearer test-sync", "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds: [{ id: guildId, name: "Test" }], knowledgeStatus: { [guildId]: { indexed: 40, state: "indexing" } }, knownVersions: {} }) }) });
   assert.equal(response.status, 200);
+  const syncResult = await response.json();
+  assert.equal(syncResult.auditEvents.length, 1, "The saved dashboard setting should be mirrored on sync.");
+  assert.deepEqual(JSON.parse(syncResult.auditEvents[0].snapshot_json).knowledgeChannelIds, [channelId]);
   assert.equal((await getState(DB, guildId)).version, version, "Progress must not modify settings or cause sync conflicts");
   const result = await (await onRequestGet({ ...args, request: request("GET") })).json();
   assert.equal(result.status.indexed, 40);
