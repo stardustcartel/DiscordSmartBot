@@ -75,6 +75,11 @@ const chatCommand = new SlashCommandBuilder()
 const serverCommands = [
   chatCommand,
   new SlashCommandBuilder()
+    .setName("ai-status")
+    .setDescription("Show the AI settings currently loaded by this bot")
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
     .setName("knowledge-search")
     .setDescription("Search this server's local knowledge base")
     .setDMPermission(false)
@@ -516,6 +521,30 @@ async function handleKnowledgeInteraction(interaction) {
   }
 }
 
+async function handleAiStatusInteraction(interaction) {
+  if (!interaction.guildId || !hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({ content: "Only server managers can view this server's AI status.", ephemeral: true });
+    return;
+  }
+  const settings = guildSettings.get(interaction.guildId);
+  const provider = settings.aiProvider === "openai" ? "OpenAI" : "Gemini";
+  const lines = ["AI settings loaded by this running bot:", `Provider: ${provider}`];
+  if (provider === "OpenAI") {
+    lines.push(`Model: ${settings.openAiModel}`);
+    lines.push(`Response speed: ${settings.openAiSpeed === "auto" ? "Project default" : settings.openAiSpeed}`);
+    lines.push(`Reasoning level: ${settings.openAiReasoning === "auto" ? "Bot default" : settings.openAiReasoning}`);
+    const observed = ai.serviceTiers.get(interaction.guildId);
+    if (observed?.model === settings.openAiModel && observed.requestedSpeed === settings.openAiSpeed && Number.isFinite(observed.observedAt)) {
+      lines.push(`Last observed OpenAI speed tier: ${observed.serviceTier} (<t:${Math.floor(observed.observedAt / 1000)}:R>)`);
+    }
+  }
+  const lastSyncedAt = dashboardSync.state.lastSyncedAt;
+  lines.push(!dashboardSync.enabled ? "Dashboard sync: disabled" : Number.isFinite(lastSyncedAt) && lastSyncedAt > 0
+    ? `Last successful dashboard sync: <t:${Math.floor(lastSyncedAt / 1000)}:R>`
+    : "Last successful dashboard sync: not yet recorded");
+  await interaction.reply({ content: lines.join("\n"), ephemeral: true, allowedMentions: { parse: [] } });
+}
+
 async function handleReminderInteraction(interaction) {
   const settings = getSettingsForGuild(interaction.guildId);
   const reminder = reminders.add({
@@ -920,6 +949,8 @@ async function handleInteraction(interaction) {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === "chat") {
     await handleChatInteraction(interaction);
+  } else if (interaction.commandName === "ai-status") {
+    await handleAiStatusInteraction(interaction);
   } else if (interaction.commandName.startsWith("knowledge-")) {
     await handleKnowledgeInteraction(interaction);
   } else if (interaction.commandName === "remind") {

@@ -99,6 +99,7 @@ class DashboardSync {
         });
       }
       this.state.initialized = true;
+      this.state.lastSyncedAt = Date.now();
       writeJson(this.statePath, this.state);
     } catch (error) {
       changedIds.forEach((guildId) => this.pending.add(guildId));

@@ -166,7 +166,10 @@ migration if needed. Create an R2 bucket and bind it as
 
 The bot bootstraps existing local settings into D1, keeps local JSON as an
 offline cache, sends Discord command changes to D1, and pulls dashboard changes
-back to the bot.
+back to the bot. Dashboard saves usually reach the running bot at its next sync
+(30 seconds by default). Server managers can run `/ai-status` in Discord to see
+the provider and OpenAI options the bot has loaded, along with the time of its
+last successful dashboard sync. The command replies privately to the manager.
 
 ### Per-server settings audit
 
