@@ -468,7 +468,7 @@ $("#logout").onclick = () => { location = "/auth/logout"; };
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
-document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = () => showTab(button.dataset.open); });
+document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = (event) => { if (button.tagName === "A") event.preventDefault(); showTab(button.dataset.open); }; });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 $("#openai-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); await loadSettings(); toast(result.message || "OpenAI key verified and saved."); } catch (error) { toast(error.message || "That OpenAI key could not be verified."); } };
