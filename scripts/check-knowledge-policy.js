@@ -43,6 +43,15 @@ assert.ok(reviewPrompt.includes("YOUR CORRECTED ANSWER") && reviewPrompt.include
 assert.equal(evidenceReviewFormat.strict, true);
 const manyRecords = Array.from({ length: 3 }, (_, i) => ({ id: `S${i + 1}`, content: `Evidence number ${i + 1}` }));
 assert.equal(validateEvidenceReview({ kind: "grounded", supported: true, answer: "Answer [S1] [S2] [S3]", evidence: manyRecords.map((r) => ({ id: r.id, quote: r.content })) }, manyRecords, policy), null, "Citation cap enforced");
+assert.equal(validateEvidenceReview({ ...review, evidence: [...review.evidence, { id: "S2", quote: "Additional evidence" }] }, [...records, { id: "S2", content: "Additional evidence" }], policy), review.answer, "Verified internal evidence does not force an extra visible citation");
+assert.equal(validateEvidenceReview({ ...review, evidence: [{ id: "S1", quote: "The Q&A is\n tonight at 8 p.m. Eastern." }] }, records, policy), review.answer, "Line wrapping must not invalidate an otherwise verbatim quote");
+for (const quote of ["The Q&A is tonight at 9 p.m. Eastern.", "The Q&A is not tonight at 8 p.m. Eastern.", "The Q&A ... at 8 p.m. Eastern."]) {
+  assert.equal(validateEvidenceReview({ ...review, evidence: [{ id: "S1", quote }] }, records, policy), null, "Changed facts and noncontiguous quotes must still fail");
+}
+const multipleFailures = inspectEvidenceReview({ kind: "grounded", supported: true, answer: "Answer [S1] [S2] [S3]", evidence: manyRecords.map((r) => ({ id: r.id, quote: r.id === "S1" ? "Fabricated quote" : r.content })) }, manyRecords, policy);
+assert.deepEqual(multipleFailures.details.issues.map((i) => i.type), ["quote_not_in_source", "unverified_citation", "citation_requirement"], "One repair receives every validation problem, including citation cap");
+assert.equal(multipleFailures.details.issues.at(-1).maximumDistinctSources, 2);
+assert.ok(reviewPrompt.includes("AT MOST 2 DISTINCT") && reviewPrompt.includes("CONTIGUOUS"));
 const store = Object.create(GuildSettingsStore.prototype);
 store.config = { defaultReminderTimeZone: "UTC", defaultAiResponsesPerHour: 30 }; store.defaultPersonality = "Helpful";
 assert.deepEqual(store.normalize({ knowledgePolicy: policy }).knowledgePolicy, policy, "Oracle normalization must preserve synced policy");

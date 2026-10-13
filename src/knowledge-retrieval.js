@@ -123,7 +123,7 @@ class KnowledgeRetrieval {
     const context = JSON.stringify({ forumTitle: access.destination.name, recentQuestions, searchOutcome: trace.searchOutcome, coverage: "Only selected channels permitted for this conversation were searched. Retrieval is bounded, not exhaustive; indexing may still be in progress. Attachments and linked pages are not transcribed. Lack of selected evidence does not establish that no relevant server discussions exist. Explain the limits of these supplied excerpts rather than claiming the server has no information.", sources: records });
     trace.sentToAnswerModel = { sourceMessageIds: sources.slice(0, records.length).map((source) => source.id), context };
     trace.status = "complete";
-    return { question: text, forumTitle: access.destination.name, recentQuestions, records, context, sources: sources.slice(0, records.length), access: refreshed, searchOutcome: trace.searchOutcome };
+    return { traceId: trace.id, question: text, forumTitle: access.destination.name, recentQuestions, records, context, sources: sources.slice(0, records.length), access: refreshed, searchOutcome: trace.searchOutcome };
     } catch (error) {
       trace.status = "failed";
       trace.reason = error.code || error.name;
@@ -134,41 +134,67 @@ class KnowledgeRetrieval {
     }
   }
   async finish({ client, guildId, channelId, userId, answer, prepared, policy = normalizePolicy() }) {
+    const started = Date.now();
+    const settings = this.store.guildSettings.get(guildId);
+    const credentials = this.indexer.credentials(guildId);
+    const trace = { id: randomUUID(), searchTraceId: prepared.traceId || null, event: "answer_check", at: new Date().toISOString(), guildId, channelId, userId,
+      question: prepared.question, provider: credentials.provider, model: credentials.provider === "openai" ? credentials.model : null,
+      requestedSpeed: settings.openAiSpeed, requestedReasoning: settings.openAiReasoning, policy, draft: answer, attempts: [], status: "started" };
+    try {
+      const result = await this.finishChecked({ client, guildId, channelId, userId, answer, prepared, policy, trace });
+      trace.finalAnswer = result;
+      return result;
+    } catch (error) {
+      trace.status = "failed"; trace.reason = error.code || error.name;
+      throw error;
+    } finally {
+      trace.durationMs = Date.now() - started;
+      this.writeTrace(guildId, trace);
+    }
+  }
+  async finishChecked({ client, guildId, channelId, userId, answer, prepared, policy, trace }) {
     const access = await this.access(client, guildId, channelId, userId);
     const valid = await this.validate(client, access, prepared.sources);
-    if (valid.length !== prepared.sources.length || valid.some((m, i) => m.content !== prepared.sources[i].content)) return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information.";
+    if (valid.length !== prepared.sources.length || valid.some((m, i) => m.content !== prepared.sources[i].content)) { trace.status = "sources_changed"; return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information."; }
     // A separate evidence review reduces unsupported leaps; code checks citations and exact quotes.
     // Fail closed on review failure, rather than publishing an unverified draft.
-    let checked, previousReview, validationFailure;
+    let checked, previousReview, validationFailure, validationDetails;
     const settings = this.store.guildSettings.get(guildId);
     const credentials = this.indexer.credentials(guildId);
     // Repair a format/validation failure once. Never return an unchecked draft or
     // confuse a broken review with an archive that has no relevant information.
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const attemptTrace = { attempt, status: "started" };
+      trace.attempts.push(attemptTrace);
       try {
         const result = await this.ai.generate({ ...credentials,
           openAiSpeed: settings.openAiSpeed, openAiReasoning: settings.openAiReasoning, scopeId: guildId,
           textFormat: evidenceReviewFormat,
-          instructions: reviewInstructions(policy, settings.personality) + (validationFailure ? `\nThe previous review failed code validation: ${validationFailure}. Re-evaluate and return a compliant corrected answer. Do not weaken evidence rules to pass validation. supported must evaluate the corrected answer, not the user's premise.` : ""),
-          conversation: [{ role: "user", text: JSON.stringify({ question: prepared.question, forumTitle: prepared.forumTitle, recentQuestions: prepared.recentQuestions, sources: prepared.records, draft: answer, previousReview }) }],
+          instructions: reviewInstructions(policy, settings.personality) + (validationFailure ? `\nThe previous review failed code validation: ${validationFailure}. The input includes validationDetails with ALL detected problems. Correct each one. For quote mismatches, copy a contiguous passage directly from the identified source. For citation limits, narrow the claims and sources together. Do not weaken evidence rules to pass validation. supported must evaluate the corrected answer, not the user's premise.` : ""),
+          conversation: [{ role: "user", text: JSON.stringify({ question: prepared.question, forumTitle: prepared.forumTitle, recentQuestions: prepared.recentQuestions, sources: prepared.records, draft: answer, previousReview, validationDetails }) }],
           maxOutputTokens: attempt === 1 ? 2400 : 4800,
         });
         previousReview = JSON.parse(result.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
         const inspected = inspectEvidenceReview(previousReview, prepared.records, policy);
         checked = inspected.answer;
         validationFailure = inspected.reason;
+        validationDetails = inspected.details;
+        Object.assign(attemptTrace, { status: checked ? "accepted" : "rejected", review: previousReview, reason: validationFailure, details: validationDetails });
         if (checked) break;
       } catch (error) {
         validationFailure = error instanceof SyntaxError ? "invalid_review_json" : error.code === "AI_OUTPUT_INCOMPLETE" ? "incomplete_review" : "review_provider_error";
+        validationDetails = undefined;
+        Object.assign(attemptTrace, { status: "failed", reason: validationFailure, errorCode: error.code || error.name });
       }
       // Metadata only: no API keys, source content, personality, or drafts in logs.
       console.warn("Knowledge evidence review rejected:", JSON.stringify({ guildId, channelId, userId, provider: credentials.provider, model: credentials.model, attempt, reason: validationFailure, kind: ["grounded", "general", "abstain", "social"].includes(previousReview?.kind) ? previousReview.kind : "invalid", sourceCount: prepared.records.length }));
       if (validationFailure === "review_provider_error") break;
     }
-    if (!checked) return "I couldn't complete the answer check right now. Please try again in a moment.";
+    if (!checked) { trace.status = "rejected"; return "I couldn't complete the answer check right now. Please try again in a moment."; }
     const finalAccess = await this.access(client, guildId, channelId, userId);
     const finalSources = await this.validate(client, finalAccess, prepared.sources);
-    if (finalSources.length !== prepared.sources.length || finalSources.some((m, i) => m.content !== prepared.sources[i].content)) return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information.";
+    if (finalSources.length !== prepared.sources.length || finalSources.some((m, i) => m.content !== prepared.sources[i].content)) { trace.status = "sources_changed"; return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information."; }
+    trace.status = "accepted";
     return cite(checked, prepared.sources);
   }
 }

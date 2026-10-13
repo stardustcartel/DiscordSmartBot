@@ -123,6 +123,13 @@ async function main() {
   const sourceNumber = prepared.sources.findIndex((m) => m.id === guidance.id) + 1;
   const answer = await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: `Use a fifty millimeter lens [S${sourceNumber}]` });
   assert.ok(answer.includes(`/channels/${guildId}/${threadId}/${guidance.id}`));
+  const checkedTrace = JSON.parse(fs.readFileSync(tracePath, "utf8").trim().split("\n").at(-1));
+  assert.equal(checkedTrace.event, "answer_check");
+  assert.equal(checkedTrace.searchTraceId, trace.id);
+  assert.equal(checkedTrace.status, "accepted");
+  assert.equal(checkedTrace.attempts[0].status, "accepted");
+  assert.equal(checkedTrace.finalAnswer, answer);
+  assert.ok(!JSON.stringify(checkedTrace).includes("fake-key"));
   const workingGenerate = retrievalAi.generate;
   let reviewAttempts = 0;
   retrievalAi.generate = async (args) => {
@@ -134,6 +141,17 @@ async function main() {
   };
   assert.equal(await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "cautious draft" }), "I cannot decide that for you. What are your goals?", "A corrected clarification must not be discarded just because the requested conclusion is unsupported");
   assert.equal(reviewAttempts, 2, "Review repair is bounded");
+  reviewAttempts = 0;
+  retrievalAi.generate = async (args) => {
+    reviewAttempts++;
+    if (reviewAttempts === 1) return JSON.stringify({ kind: "grounded", supported: true, answer: `Lens advice [S${sourceNumber}]`, evidence: [{ id: `S${sourceNumber}`, quote: "This quote was paraphrased" }] });
+    const input = JSON.parse(args.conversation[0].text);
+    assert.equal(input.validationDetails.issues[0].id, `S${sourceNumber}`);
+    assert.equal(input.validationDetails.issues[0].type, "quote_not_in_source");
+    return JSON.stringify({ kind: "grounded", supported: true, answer: `Lens advice [S${sourceNumber}]`, evidence: [{ id: `S${sourceNumber}`, quote: guidance.content }] });
+  };
+  assert.ok((await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "draft" })).includes("[source"));
+  assert.equal(reviewAttempts, 2);
   reviewAttempts = 0;
   retrievalAi.generate = async () => { if (++reviewAttempts === 1) return "{truncated"; return JSON.stringify({ kind: "social", supported: true, answer: "Hello!", evidence: [] }); };
   assert.equal(await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: "Hello!" }), "Hello!");
