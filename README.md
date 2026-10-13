@@ -168,8 +168,15 @@ The bot bootstraps existing local settings into D1, keeps local JSON as an
 offline cache, sends Discord command changes to D1, and pulls dashboard changes
 back to the bot. Dashboard saves usually reach the running bot at its next sync
 (30 seconds by default). Server managers can run `/ai-status` in Discord to see
-the provider and OpenAI options the bot has loaded, along with the time of its
-last successful dashboard sync. The command replies privately to the manager.
+the provider, ordered Gemini model ladder or OpenAI options loaded, and the
+last successful dashboard sync. The command replies privately. Gemini model
+results are saved during normal calls for the current server key and persist
+across restarts and provider switches. A recently observed limit is struck
+through; observations older than 30 minutes are unverified. Running
+`/ai-status refresh:true` explicitly checks each Gemini model using API
+requests, which can use quota or incur charges. New keys have no observations.
+Knowledge-backed `/chat` replies show a private, dismissible standby notice;
+ordinary @mentions can only show the bot's public typing indicator.
 
 ### Per-server settings audit
 

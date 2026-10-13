@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 let selected = "";
 let settings = {};
+let settingsLoadedGuild = "";
 let inviteUrl = "/auth/invite";
 let dashboardReady = false;
 let permissionMemberId = "";
@@ -17,6 +18,38 @@ const api = (url, options = {}) => fetch(url, { cache: "no-store", headers: { "C
   if (!(response.headers.get("content-type") || "").includes("application/json")) { const error = Error("Dashboard service unavailable"); error.code = "DASHBOARD_API_UNAVAILABLE"; throw error; }
   const data = await response.json(); if (!response.ok) throw Error(data.error || "Something went wrong"); return data;
 });
+const sameSelection = (left, right) => JSON.stringify([...(left || [])].sort()) === JSON.stringify([...(right || [])].sort());
+function sameYouTubeSource(input, subscription) {
+  const source = String(input || "").trim().replace(/\/$/, "");
+  const saved = String(subscription.sourceUrl || "").trim().replace(/\/$/, "");
+  if (source === saved) return true;
+  const match = source.match(/^https?:\/\/(?:www\.)?youtube\.com\/channel\/(UC[\w-]{20,})(?:\/?(?:[?#].*)?)$/i);
+  return Boolean(match && match[1] === subscription.youtubeChannelId);
+}
+function updateSaveButtons() {
+  const ready = Boolean(selected && settingsLoadedGuild === selected);
+  const set = (selector, enabled) => { const button = $(selector); if (button) button.disabled = !ready || !enabled || button.closest("form")?.getAttribute("aria-busy") === "true"; };
+  set("#personality-form button[type=submit]", $("#personality-form [name=personality]").value !== (settings.personality || ""));
+  for (const provider of ["gemini", "openai"]) set(`#${provider}-form button[type=submit]`, Boolean($(`#${provider}-form [name=apiKey]`).value.trim()));
+  set("#provider-form button[type=submit]", $("#ai-provider").value !== (settings.aiProvider || "gemini"));
+  set("#openai-model-form button[type=submit]", $("#openai-model").value !== (settings.openAiModel || "gpt-6-luna"));
+  set("#openai-options-form button[type=submit]", $("#openai-speed").value !== (settings.openAiSpeed || "auto") || $("#openai-reasoning").value !== (settings.openAiReasoning || "auto"));
+  const profileBusy = Boolean(document.querySelector('[data-profile-field][aria-busy="true"]'));
+  for (const form of document.querySelectorAll("[data-profile-field]")) {
+    const field = form.dataset.profileField, input = form.elements.namedItem(field);
+    set(`[data-profile-field="${field}"] button[type=submit]`, !profileBusy && (field === "avatar" || field === "banner" ? Boolean(input.files?.length) : input.value !== (settings.profile?.[field] || "")));
+  }
+  set("#bot-access-form button[type=submit]", !sameSelection(botAccessSelections.channels, settings.botResponseChannelIds) || !sameSelection(botAccessSelections.auto, settings.botAutoResponseChannelIds) || !sameSelection(botAccessSelections.roles, settings.botAccessRoleIds));
+  const youtubeSource = $("#youtube-form [name=source]").value.trim();
+  const youtubeDestination = $("#destination").value;
+  const youtubeTemplate = $("#youtube-form [name=announcementTemplate]").value.trim();
+  const existingNotification = settings.youtubeSubscriptions?.some((item) => item.destinationChannelId === youtubeDestination && (item.announcementTemplate || defaultAnnouncementTemplate) === youtubeTemplate && sameYouTubeSource(youtubeSource, item));
+  set("#youtube-form button[type=submit]", Boolean(youtubeSource && youtubeDestination && youtubeTemplate && !existingNotification));
+  set("#permission-member-form button[type=submit]", Boolean(permissionMemberId || $("#permission-member-search").value.trim()));
+  set("#permission-role-form button[type=submit]", Boolean(permissionRoleId));
+  set("#announcement-save", !$("#announcement-save").hidden && $("#announcement-editor").value !== announcementModalState.initialValue && Boolean($("#announcement-editor").value.trim()));
+  if (typeof updateKnowledgeSaveButtons === "function") updateKnowledgeSaveButtons();
+}
 const dataUrl = (file) => new Promise((resolve, reject) => { if (!file) return resolve(""); const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
 const subscriptionKey = (subscription) => `${subscription.youtubeChannelId}:${subscription.destinationChannelId}`;
 
@@ -112,6 +145,7 @@ async function loadOpenAiModels(guildId, currentModel) {
   if (!models.includes(currentModel)) models = [currentModel, ...models];
   list.replaceChildren(...models.map((model) => { const option = document.createElement("button"); option.type = "button"; option.className = "select-option"; option.setAttribute("role", "option"); option.dataset.model = model; option.textContent = model; option.onclick = () => selectOpenAiModel(model); return option; }));
   selectOpenAiModel(currentModel || "gpt-6-luna");
+  updateSaveButtons();
 }
 function selectAiProvider(provider) { const value = provider === "openai" ? "openai" : "gemini"; $("#ai-provider").value = value; $("#ai-provider-label").textContent = value === "openai" ? "OpenAI" : "Gemini"; document.querySelectorAll("#ai-provider-options .select-option").forEach((option) => option.setAttribute("aria-selected", String(option.dataset.provider === value))); closeAiProviderMenu(); }
 function renderDestinationChannels(channels) { const trigger = $("#destination-trigger"); const list = $("#destination-list"); const input = $("#destination"); input.value = ""; $("#destination-label").textContent = channels.length ? "Select an announcement channel" : "No text or announcement channels available"; trigger.disabled = !channels.length; list.innerHTML = channels.map((channel) => `<button type="button" class="select-option" role="option" data-channel-id="${channel.id}" data-channel-name="${esc(channel.name)}"># ${esc(channel.name)}${channel.type === 5 ? " · Announcement" : ""}</button>`).join(""); list.querySelectorAll(".select-option").forEach((option) => { option.onclick = () => { input.value = option.dataset.channelId; $("#destination-label").textContent = `# ${option.dataset.channelName}`; list.querySelectorAll(".select-option").forEach((item) => item.setAttribute("aria-selected", String(item === option))); closeDestinationMenu(); }; }); }
@@ -290,6 +324,8 @@ async function selectGuild(guildId, guild) {
     if (label) label.textContent = `Choose ${form.dataset.profileField}`;
   });
   selected = guildId; $("#server-name").textContent = guild?.name || "Server"; $("#server-title").textContent = guild?.name || "Server settings"; $("#overview-server").textContent = guild?.name || "this server"; $("#server-icon").textContent = guild?.icon ? "" : "✦";
+  settingsLoadedGuild = "";
+  updateSaveButtons();
   if (guild?.icon) $("#server-icon").innerHTML = `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128" alt="">`;
   showWorkspace(); try { await loadSettings(); } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") toast("This server is connected. Settings storage is the next connection step."); else toast(error.message); }
 }
@@ -336,6 +372,7 @@ async function loadSettings() {
   const data = await api(`/api/guild/${guildId}/settings`);
   if (guildId !== selected) return;
   settings = data.settings;
+  settingsLoadedGuild = guildId;
   $("#personality-form [name=personality]").value = settings.personality || "";
   $("#profile-editor [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-editor [name=bio]").value = settings.profile?.bio || "";
   renderProfilePreview(settings.profile, data.version);
@@ -353,6 +390,7 @@ async function loadSettings() {
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
   document.querySelectorAll("#subscriptions .subscription-remove").forEach((button) => { button.onclick = async () => { await api(`/api/guild/${selected}/youtube`, { method: "DELETE", body: JSON.stringify({ youtubeChannelId: button.dataset.youtubeChannelId, destinationChannelId: button.dataset.destinationChannelId }) }); toast("Notification removed."); loadSettings(); }; });
+  updateSaveButtons();
 }
 
 function closePermissionRoleMenu() {
@@ -406,6 +444,7 @@ async function loadPermissions() {
     $("#permission-add-role").disabled = true;
   }
   $("#permission-role-trigger").disabled = !roles.length || !data.canManagePermissions;
+  updateSaveButtons();
 }
 
 $("#permission-member-search").oninput = (event) => {
@@ -469,7 +508,7 @@ $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = (event) => { if (button.tagName === "A") event.preventDefault(); showTab(button.dataset.open); }; });
-$("#personality-form").onsubmit = async (event) => { event.preventDefault(); await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: event.target.personality.value }) }); toast("Personality saved."); };
+$("#personality-form").onsubmit = async (event) => { event.preventDefault(); const value = event.target.personality.value; try { await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: value }) }); settings.personality = value; updateSaveButtons(); toast("Personality saved."); } catch (error) { toast(error.message || "Could not save personality."); } };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
 $("#openai-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); await loadSettings(); toast(result.message || "OpenAI key verified and saved."); } catch (error) { toast(error.message || "That OpenAI key could not be verified."); } };
 $("#openai-model-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/openai-model`, { method: "PUT", body: JSON.stringify({ model: $("#openai-model").value }) }); await loadSettings(); toast(result.message || "OpenAI model updated."); } catch (error) { toast(error.message || "Could not change the OpenAI model."); } };
@@ -487,7 +526,7 @@ document.querySelectorAll("[data-profile-field]").forEach((form) => {
     if (isImage && !file) return toast(`Choose a ${field} image first.`);
     if (file && file.size > 8 * 1024 * 1024) return toast("Images must be 8 MB or smaller.");
     const buttons = [...document.querySelectorAll("[data-profile-field] > button")];
-    if (buttons.some((button) => button.disabled)) return;
+    if (document.querySelector("[data-profile-field][aria-busy=true]")) return;
     buttons.forEach((button) => { button.disabled = true; });
     form.setAttribute("aria-busy", "true");
     let saved = false;
@@ -511,6 +550,7 @@ document.querySelectorAll("[data-profile-field]").forEach((form) => {
     } finally {
       buttons.forEach((button) => { button.disabled = false; });
       form.removeAttribute("aria-busy");
+      updateSaveButtons();
     }
   };
 });
@@ -526,11 +566,12 @@ $("#bot-access-form").onsubmit = async (event) => {
     settings.botResponseChannelIds = data.channelIds;
     settings.botAutoResponseChannelIds = data.autoChannelIds;
     settings.botAccessRoleIds = data.roleIds;
+    updateSaveButtons();
     toast("Bot access saved.");
   } catch (error) { toast(error.message || "Could not save bot access."); }
 };
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
-$("#announcement-editor").oninput = (event) => { $("#announcement-save").hidden = event.target.value === announcementModalState.initialValue; };
+$("#announcement-editor").oninput = (event) => { $("#announcement-save").hidden = event.target.value === announcementModalState.initialValue; updateSaveButtons(); };
 $("#announcement-close").onclick = closeAnnouncementModal;
 $("#announcement-modal").onclick = (event) => { if (event.target === event.currentTarget) closeAnnouncementModal(); };
 $("#announcement-modal-form").onsubmit = async (event) => {
@@ -569,6 +610,20 @@ $("#bot-role-trigger").onclick = () => toggleBotAccessMenu("roles");
 document.addEventListener("click", (event) => { if (!event.target.closest("#destination-select")) closeDestinationMenu(); if (!event.target.closest("#ai-provider-select")) closeAiProviderMenu(); if (!event.target.closest("#openai-model-select")) closeOpenAiModelMenu(); for (const kind of ["speed", "reasoning"]) if (!event.target.closest(`#openai-${kind}-select`)) closeOpenAiOptionMenu(kind); if (!event.target.closest(".permission-role-wrap")) closePermissionRoleMenu(); if (!event.target.closest(".bot-access-select")) closeBotAccessMenus(); if (!event.target.closest(".permission-search-wrap")) $("#permission-member-results").hidden = true; });
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if (!$("#announcement-modal").hidden) closeAnnouncementModal(); else { closeDestinationMenu(); closeAiProviderMenu(); closeOpenAiModelMenu(); for (const kind of ["speed", "reasoning"]) closeOpenAiOptionMenu(kind); closePermissionRoleMenu(); closeBotAccessMenus(); $("#permission-member-results").hidden = true; } });
 document.querySelectorAll(".file-input").forEach((input) => { input.onchange = () => { const label = input.closest(".file-picker").querySelector(".file-label"); label.textContent = input.files[0]?.name || (input.name === "avatar" ? "Choose avatar" : "Choose banner"); }; });
+document.addEventListener("input", updateSaveButtons);
+document.addEventListener("change", updateSaveButtons);
+document.addEventListener("click", () => queueMicrotask(updateSaveButtons));
+for (const id of ["personality-form", "gemini-form", "openai-form", "provider-form", "openai-model-form", "openai-options-form", "bot-access-form", "youtube-form", "permission-member-form", "permission-role-form"]) {
+  const form = $(`#${id}`), submit = form.onsubmit;
+  form.onsubmit = async (event) => {
+    if (form.getAttribute("aria-busy") === "true") { event.preventDefault(); return; }
+    form.setAttribute("aria-busy", "true");
+    updateSaveButtons();
+    try { await submit.call(form, event); }
+    finally { form.removeAttribute("aria-busy"); updateSaveButtons(); }
+  };
+}
 setupMobileNavigationHint();
 setupKnowledge();
+updateSaveButtons();
 load();

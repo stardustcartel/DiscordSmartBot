@@ -91,6 +91,13 @@ async function main() {
   assert.ok(geminiRequests[0].config.systemInstruction.includes("Trusted runtime clock:"));
   assert.ok(geminiRequests[0].config.systemInstruction.includes("Knowledge-only mode"));
   assert.ok(geminiRequests[0].config.systemInstruction.includes("up to 2"));
+  ai.config.geminiModels = ["gemini-first", "gemini-second"];
+  ai.getClient = () => ({ models: { generateContent: async ({ model }) => {
+    if (model === "gemini-first") { const error = new Error("RESOURCE_EXHAUSTED"); error.status = 429; throw error; }
+    return { text: "Fallback answer" };
+  } } });
+  assert.equal(await ai.generate({ provider: "gemini", apiKey: "fake-gemini", scopeId: guildId, conversation: [{ role: "user", text: "Question" }] }), "Fallback answer");
+  assert.deepEqual(ai.geminiStatus.snapshot(guildId, "fake-gemini", ai.config.geminiModels).models.map(({ outcome }) => outcome), ["limit", "success"]);
   console.log("AI provider storage and OpenAI chat checks passed.");
 }
 

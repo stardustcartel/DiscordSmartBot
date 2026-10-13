@@ -6,7 +6,16 @@ let knowledgeLoadSerial = 0;
 let knowledgePolicyDirty = false;
 let knowledgePolicyGuild = null;
 let knowledgePolicyRevision = 0;
+let knowledgeSavedGuild = null;
+let knowledgeSavedChannels = [];
+let knowledgeSavedPolicy = null;
 let knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [] };
+const knowledgePolicyValue = (policy) => JSON.stringify({ knowledgeOnly: Boolean(policy?.knowledgeOnly), requireCitations: Boolean(policy?.requireCitations), citationCount: Number(policy?.citationCount || 3), generalChannels: [...(policy?.generalChannels || [])].sort(), uncitedChannels: [...(policy?.uncitedChannels || [])].sort() });
+function updateKnowledgeSaveButtons() {
+  const ready = Boolean(selected && selected === knowledgeSavedGuild && !$("#knowledge-form").inert);
+  $("#knowledge-form button[type=submit]").disabled = !ready || $("#knowledge-form").getAttribute("aria-busy") === "true" || JSON.stringify([...knowledgeSelections].sort()) === JSON.stringify([...knowledgeSavedChannels].sort());
+  $("#knowledge-policy-form button[type=submit]").disabled = !ready || $("#knowledge-policy-form").getAttribute("aria-busy") === "true" || knowledgePolicyValue(knowledgePolicy) === knowledgePolicyValue(knowledgeSavedPolicy);
+}
 const knowledgePolicyKinds = ["count", "general", "uncited"];
 function closeKnowledgePolicyMenus() {
   for (const kind of knowledgePolicyKinds) {
@@ -46,6 +55,7 @@ function renderKnowledgePolicy() {
     }));
     if (focusValue) [...list.querySelectorAll("button")].find((b) => b.dataset.value === focusValue)?.focus();
   }
+  updateKnowledgeSaveButtons();
 }
 function closeKnowledgeMenu() {
   closeKnowledgePolicyMenus();
@@ -67,6 +77,7 @@ function renderKnowledgeChannels() {
     renderKnowledgeChannels();
   }; });
   if (focusedId) list.querySelector(`[data-knowledge-id="${focusedId}"]`)?.focus();
+  updateKnowledgeSaveButtons();
 }
 async function loadKnowledge(reset = false) {
   const guildId = selected;
@@ -76,6 +87,9 @@ async function loadKnowledge(reset = false) {
   if (guildId !== selected || serial !== knowledgeLoadSerial) return;
   $("#knowledge-form").inert = false;
   $("#knowledge-policy-form").inert = false;
+  knowledgeSavedGuild = guildId;
+  knowledgeSavedChannels = [...data.channelIds];
+  knowledgeSavedPolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], ...data.policy };
   const guildChanged = knowledgePolicyGuild !== guildId;
   if (guildChanged || !knowledgePolicyDirty) {
     knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], ...data.policy };
@@ -90,6 +104,7 @@ async function loadKnowledge(reset = false) {
     knowledgeDirty = false;
   }
   renderKnowledgePolicy();
+  updateKnowledgeSaveButtons();
   const status = data.status;
   const stale = !status || Date.now() - Number(data.reportedAt) > 120000;
   const pending = status && JSON.stringify([...(status.channelIds || [])].sort()) !== JSON.stringify([...data.channelIds].sort());
@@ -113,13 +128,14 @@ function setupKnowledge() {
     event.preventDefault();
     const guildId = selected, revision = knowledgePolicyRevision;
     const button = event.target.querySelector("button[type=submit]"); button.disabled = true;
+    event.target.setAttribute("aria-busy", "true");
     try {
       const result = await api(`/api/guild/${guildId}/knowledge`, { method: "PUT", body: JSON.stringify({ policy: knowledgePolicy }) });
       if (guildId === selected) {
         if (revision === knowledgePolicyRevision) knowledgePolicyDirty = false;
         closeKnowledgePolicyMenus(); await loadKnowledge(); toast(result.message);
       }
-    } catch (error) { toast(error.message); } finally { button.disabled = false; }
+    } catch (error) { toast(error.message); } finally { event.target.removeAttribute("aria-busy"); updateKnowledgeSaveButtons(); }
   };
   $("#knowledge-trigger").onclick = () => {
     closeKnowledgePolicyMenus();
@@ -133,12 +149,13 @@ function setupKnowledge() {
     event.preventDefault();
     const button = event.target.querySelector("button[type=submit]");
     button.disabled = true;
+    event.target.setAttribute("aria-busy", "true");
     const guildId = selected;
     const revision = knowledgeSourceRevision;
     try {
       const result = await api(`/api/guild/${guildId}/knowledge`, { method: "PUT", body: JSON.stringify({ channelIds: [...knowledgeSelections] }) });
       if (guildId === selected) { if (revision === knowledgeSourceRevision) knowledgeDirty = false; closeKnowledgeMenu(); await loadKnowledge(); toast(result.message); }
-    } catch (error) { toast(error.message); } finally { button.disabled = false; }
+    } catch (error) { toast(error.message); } finally { event.target.removeAttribute("aria-busy"); updateKnowledgeSaveButtons(); }
   };
   document.addEventListener("click", (event) => {
     if (!event.target.closest("#knowledge-select, .knowledge-policy-select")) closeKnowledgeMenu();

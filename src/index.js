@@ -16,6 +16,7 @@ const {
 } = require("discord.js");
 const { config } = require("./config");
 const { AiChat } = require("./ai");
+const { failureKind } = require("./gemini-model-status");
 const { GuildSettingsStore, normalizeTimeZone } = require("./guild-settings");
 const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
@@ -78,7 +79,8 @@ const serverCommands = [
     .setName("ai-status")
     .setDescription("Show the AI settings currently loaded by this bot")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addBooleanOption((option) => option.setName("refresh").setDescription("Check Gemini models now (uses API requests)")),
   new SlashCommandBuilder()
     .setName("knowledge-search")
     .setDescription("Search this server's local knowledge base")
@@ -414,7 +416,14 @@ async function handleChatInteraction(interaction) {
     await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
     return;
   }
-  await interaction.deferReply();
+  const currentPolicy = effectivePolicy(getSettingsForGuild(interaction.guildId).knowledgePolicy, interaction.channel);
+  if (currentPolicy.knowledgeOnly) {
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.editReply({
+      content: "Standby. I'm scouring through my general knowledgebase & database of conversations on our server to find info relevant to your question. This can sometimes take up to 60sec or so.",
+      allowedMentions: { parse: [] },
+    });
+  } else await interaction.deferReply();
   try {
     const response = await requestAiResponse({
       guildId: interaction.guildId,
@@ -423,10 +432,14 @@ async function handleChatInteraction(interaction) {
       text,
     });
     const chunks = splitMessage(response);
-    await interaction.editReply({
+    await (currentPolicy.knowledgeOnly ? interaction.followUp({
+      content: chunks.shift() || "The AI provider returned an empty response.",
+      ephemeral: false,
+      allowedMentions: { parse: [] },
+    }) : interaction.editReply({
       content: chunks.shift() || "The AI provider returned an empty response.",
       allowedMentions: { parse: [] },
-    });
+    }));
     for (const chunk of chunks) {
       await interaction.followUp({
         content: chunk,
@@ -435,10 +448,14 @@ async function handleChatInteraction(interaction) {
     }
   } catch (error) {
     console.error("Chat command failed:", error.message);
-    await interaction.editReply({
+    await (currentPolicy.knowledgeOnly ? interaction.followUp({
+      content: aiErrorMessage(error),
+      ephemeral: false,
+      allowedMentions: { parse: [] },
+    }) : interaction.editReply({
       content: aiErrorMessage(error),
       allowedMentions: { parse: [] },
-    });
+    }));
   }
 }
 
@@ -531,6 +548,21 @@ async function handleAiStatusInteraction(interaction) {
   }
   const settings = guildSettings.get(interaction.guildId);
   const provider = settings.aiProvider === "openai" ? "OpenAI" : "Gemini";
+  const refresh = provider === "Gemini" && interaction.options.getBoolean("refresh") === true;
+  if (refresh) {
+    await interaction.deferReply({ ephemeral: true });
+    const apiKey = guildSecrets.getGeminiKey(interaction.guildId);
+    if (apiKey) {
+      for (const model of config.geminiModels) {
+        try {
+          await ai.getClient(apiKey).models.generateContent({ model, contents: [{ role: "user", parts: [{ text: "Reply OK." }] }], config: { maxOutputTokens: 8, httpOptions: { timeout: 8000 } } });
+          ai.geminiStatus.observe(interaction.guildId, apiKey, model, "success");
+        } catch (error) {
+          ai.geminiStatus.observe(interaction.guildId, apiKey, model, failureKind(error));
+        }
+      }
+    }
+  }
   const lines = ["AI settings loaded by this running bot:", `Provider: ${provider}`];
   if (provider === "OpenAI") {
     lines.push(`Model: ${settings.openAiModel}`);
@@ -541,11 +573,24 @@ async function handleAiStatusInteraction(interaction) {
       lines.push(`Last observed OpenAI speed tier: ${observed.serviceTier} (<t:${Math.floor(observed.observedAt / 1000)}:R>)`);
     }
   }
+  if (provider === "Gemini") {
+    const apiKey = guildSecrets.getGeminiKey(interaction.guildId);
+    const snapshot = ai.geminiStatus.snapshot(interaction.guildId, apiKey, config.geminiModels);
+    lines.push("Model:");
+    snapshot.models.forEach(({ model, outcome }, index) => {
+      const label = outcome === "limit" ? `~~${model}~~ (limit observed recently)` : outcome === "unknown" ? `${model} (not checked recently)` : outcome === "unavailable" ? `${model} (temporarily unavailable when last checked)` : outcome === "error" ? `${model} (last check failed)` : model;
+      lines.push(`${index + 1}. ${label}`);
+    });
+    if (snapshot.lastUsed) lines.push(`Last successful Gemini model: ${snapshot.lastUsed.model} (<t:${Math.floor(snapshot.lastUsed.observedAt / 1000)}:R>)`);
+    lines.push("*Bot starts with the highest-priority model and tries the next available model when one reaches a limit or is temporarily unavailable.*");
+    lines.push(refresh ? "Refreshed just now. This check used Gemini API requests." : "Recent observations are saved from normal bot requests. Use `/ai-status refresh:true` to check now; this uses Gemini API requests.");
+  }
   const lastSyncedAt = dashboardSync.state.lastSyncedAt;
   lines.push(!dashboardSync.enabled ? "Dashboard sync: disabled" : Number.isFinite(lastSyncedAt) && lastSyncedAt > 0
     ? `Last successful dashboard sync: <t:${Math.floor(lastSyncedAt / 1000)}:R>`
     : "Last successful dashboard sync: not yet recorded");
-  await interaction.reply({ content: lines.join("\n"), ephemeral: true, allowedMentions: { parse: [] } });
+  if (refresh) await interaction.editReply({ content: lines.join("\n"), allowedMentions: { parse: [] } });
+  else await interaction.reply({ content: lines.join("\n"), ephemeral: true, allowedMentions: { parse: [] } });
 }
 
 async function handleReminderInteraction(interaction) {

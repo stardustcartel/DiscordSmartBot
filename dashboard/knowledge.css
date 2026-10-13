@@ -21,6 +21,7 @@
 .knowledge-switch-row > span { min-width: 0; }
 .knowledge-switch-row strong { display: block; color: #fff; line-height: 1.5; }
 .knowledge-switch-row small { display: block; margin-top: 6px; color: #bcb1d6; font-size: .85rem; line-height: 1.6; font-weight: 400; }
+.knowledge-switch-row .knowledge-standby-note { margin-top: 14px; color: #bcb1d6; font-size: .85rem; font-style: italic; font-weight: 400; line-height: 1.6; }
 #knowledge-policy-form input[role=switch] { appearance: none; -webkit-appearance: none; position: relative; width: 46px; height: 26px; padding: 0; margin: 0; border: 1px solid #9480ef66; border-radius: 20px; background: #292237; flex: 0 0 46px; cursor: pointer; transition: background .18s, box-shadow .18s; }
 #knowledge-policy-form input[role=switch]::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; border-radius: 50%; background: #ded9ec; transition: transform .18s; }
 #knowledge-policy-form input[role=switch]:checked { background: #8065d8; box-shadow: 0 0 16px #9480ef88; border-color: #ae96ff; }

@@ -9,6 +9,8 @@ let document;
 class Element {
   constructor() { this.hidden = true; this.children = []; this.dataset = {}; this.attributes = {}; this.classList = { add() {}, remove() {}, toggle() {}, contains: () => false }; }
   setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key] ?? null; }
+  removeAttribute(key) { delete this.attributes[key]; }
   append(child) { child.parent = this; this.children.push(child); }
   replaceChildren(...children) { this.children = []; children.forEach((c) => this.append(c)); }
   contains(element) { return element === this || this.children.some((c) => c.contains(element)); }
@@ -64,7 +66,8 @@ async function main() {
   assert.equal($("#knowledge-count-options").hidden, true, "Single-select closes on selection");
   assert.equal($("#knowledge-count-label").textContent, "5");
   const submit = new Element(); submit.tag = "button";
-  await $("#knowledge-policy-form").onsubmit({ preventDefault() {}, target: { querySelector: () => submit } });
+  const policyForm = $("#knowledge-policy-form"); policyForm.querySelector = () => submit;
+  await policyForm.onsubmit({ preventDefault() {}, target: policyForm });
   assert.equal(saved.policy.knowledgeOnly, false);
   assert.equal(saved.policy.requireCitations, true);
   assert.deepEqual(saved.policy.uncitedChannels, [channelId, otherId]);

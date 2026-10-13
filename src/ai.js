@@ -1,5 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 const { trustedClock, directClockAnswer, evidenceInstructions } = require("./knowledge-policy");
+const { GeminiModelStatus, failureKind } = require("./gemini-model-status");
 
 const maxConversationMessages = 12;
 const fallbackPersonality = "You are a helpful, friendly Discord assistant.";
@@ -28,6 +29,7 @@ class AiChat {
     this.conversations = new Map();
     this.usage = new Map();
     this.serviceTiers = new Map();
+    this.geminiStatus = new GeminiModelStatus(config.dataDirectory);
   }
 
   getClient(apiKey) {
@@ -154,9 +156,11 @@ class AiChat {
             temperature: 0.8,
           },
         });
+        this.geminiStatus.observe(scopeId, apiKey, model, "success");
         break;
       } catch (error) {
         lastError = error;
+        this.geminiStatus.observe(scopeId, apiKey, model, failureKind(error));
         if (index === models.length - 1 || !canTryNextModel(error)) throw error;
         console.warn(
           "Gemini model " + model + " failed; trying the next configured model.",
