@@ -175,8 +175,8 @@ across restarts and provider switches. A recently observed limit is struck
 through; observations older than 30 minutes are unverified. Running
 `/ai-status refresh:true` explicitly checks each Gemini model using API
 requests, which can use quota or incur charges. New keys have no observations.
-Knowledge-backed `/chat` replies show a private, dismissible standby notice;
-ordinary @mentions can only show the bot's public typing indicator.
+The bot shows a typing indicator while preparing automatic forum and ordinary
+message replies.
 
 ### Per-server settings audit
 

@@ -28,8 +28,9 @@ function sameYouTubeSource(input, subscription) {
 }
 function updateSaveButtons() {
   const ready = Boolean(selected && settingsLoadedGuild === selected);
-  const set = (selector, enabled) => { const button = $(selector); if (button) button.disabled = !ready || !enabled || button.closest("form")?.getAttribute("aria-busy") === "true"; };
-  set("#personality-form button[type=submit]", $("#personality-form [name=personality]").value !== (settings.personality || ""));
+  const set = (selector, enabled) => { const button = $(selector) || (selector.includes("button[type=submit]") ? $(selector.replace("button[type=submit]", "button:not([type])")) : null); if (button) button.disabled = !ready || !enabled || button.closest("form")?.getAttribute("aria-busy") === "true"; };
+  const personality = $("#personality-form [name=personality]").value;
+  set("#personality-form button[type=submit]", Boolean(personality.trim()) && personality !== (settings.personality || ""));
   for (const provider of ["gemini", "openai"]) set(`#${provider}-form button[type=submit]`, Boolean($(`#${provider}-form [name=apiKey]`).value.trim()));
   set("#provider-form button[type=submit]", $("#ai-provider").value !== (settings.aiProvider || "gemini"));
   set("#openai-model-form button[type=submit]", $("#openai-model").value !== (settings.openAiModel || "gpt-6-luna"));

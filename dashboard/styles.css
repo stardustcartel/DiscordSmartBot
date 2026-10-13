@@ -70,9 +70,9 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .profile-field-form{min-width:0;align-content:start;gap:12px;margin:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
 .profile-field-form>button{max-width:100%;color:#fff;cursor:pointer}
 .profile-field-form>button:disabled{opacity:.55;cursor:wait}
-.workspace-grid form button[type=submit]:disabled{background:#383848;border-color:#555467;box-shadow:none;color:#aaa9b9;-webkit-text-fill-color:#aaa9b9;opacity:.7;cursor:not-allowed;transform:none}
-.workspace-grid form button[type=submit]:disabled::before{color:#aaa9b9;transform:none}
-.workspace-grid form button[type=submit]:disabled:hover{background:#383848;box-shadow:none;transform:none}
+.workspace-grid form button[type=submit]:disabled,.workspace-grid form button:not([type]):disabled{background:#383848;border-color:#555467;box-shadow:none;color:#aaa9b9;-webkit-text-fill-color:#aaa9b9;opacity:.7;cursor:not-allowed;transform:none}
+.workspace-grid form button[type=submit]:disabled::before,.workspace-grid form button:not([type]):disabled::before{color:#aaa9b9;transform:none}
+.workspace-grid form button[type=submit]:disabled:hover,.workspace-grid form button:not([type]):disabled:hover{background:#383848;box-shadow:none;transform:none}
 #knowledge-form > button[type=submit]:disabled,#knowledge-policy-form > button[type=submit]:disabled{color:#aaa9b9;-webkit-text-fill-color:#aaa9b9}
 .profile-field-form .file-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-field-form textarea[name=bio]{min-height:176px}

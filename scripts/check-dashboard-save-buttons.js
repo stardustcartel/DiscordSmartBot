@@ -39,6 +39,9 @@ $("#personality-form [name=personality]").value = "Different";
 update(); assert.equal($("#personality-form button[type=submit]").disabled, false);
 $("#personality-form [name=personality]").value = "Be helpful";
 update(); assert.equal($("#personality-form button[type=submit]").disabled, true, "Reverting a value disables Save again");
+$("#personality-form [name=personality]").value = "   ";
+update(); assert.equal($("#personality-form button[type=submit]").disabled, true, "Blank personality cannot be saved even if the previous value was not blank");
+$("#personality-form [name=personality]").value = "Be helpful";
 $("#ai-provider").value = "openai";
 $("#openai-speed").value = "fast";
 $("#openai-model").value = "gpt-6-sol";
@@ -59,4 +62,22 @@ $("#youtube-form [name=announcementTemplate]").value = "A video";
 update(); assert.equal($("#youtube-form button[type=submit]").disabled, true, "Identical YouTube notification cannot be resaved");
 $("#youtube-form [name=announcementTemplate]").value = "A different video";
 update(); assert.equal($("#youtube-form button[type=submit]").disabled, false, "A changed YouTube message can be saved");
+const html = fs.readFileSync(path.join(__dirname, "../dashboard/index.html"), "utf8");
+assert.match(html, /id="personality-form"[^]*?<button type="submit">Save personality<\/button>/);
+for (const id of ["youtube-form", "gemini-form", "openai-form"]) {
+  assert.match(html, new RegExp(`id="${id}"[^]*?<button>Save [^<]+<\\/button>`), `${id} currently uses an implicit submit button`);
+}
+const implicitElements = new Map();
+const implicit$ = (selector) => {
+  if (["youtube-form", "gemini-form", "openai-form"].some((id) => selector === `#${id} button[type=submit]`)) return null;
+  if (!implicitElements.has(selector)) implicitElements.set(selector, { value: "", disabled: false, hidden: false, closest: form });
+  return implicitElements.get(selector);
+};
+const implicitContext = vm.createContext({ ...context, $: implicit$, selected: "guild", settingsLoadedGuild: "guild" });
+vm.runInContext(implementation, implicitContext);
+vm.runInContext("updateSaveButtons()", implicitContext);
+for (const id of ["youtube-form", "gemini-form", "openai-form"]) assert.equal(implicit$(`#${id} button:not([type])`).disabled, true, `${id} implicit submit button is disabled when empty`);
+implicit$("#gemini-form [name=apiKey]").value = "a-new-key";
+vm.runInContext("updateSaveButtons()", implicitContext);
+assert.equal(implicit$("#gemini-form button:not([type])").disabled, false, "Implicit submit button enables when filled");
 console.log("Dashboard Save buttons reflect empty, unchanged, edited, reverted, and guild-loading states.");

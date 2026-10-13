@@ -416,14 +416,7 @@ async function handleChatInteraction(interaction) {
     await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
     return;
   }
-  const currentPolicy = effectivePolicy(getSettingsForGuild(interaction.guildId).knowledgePolicy, interaction.channel);
-  if (currentPolicy.knowledgeOnly) {
-    await interaction.deferReply({ ephemeral: true });
-    await interaction.editReply({
-      content: "Standby. I'm scouring through my general knowledgebase & database of conversations on our server to find info relevant to your question. This can sometimes take up to 60sec or so.",
-      allowedMentions: { parse: [] },
-    });
-  } else await interaction.deferReply();
+  await interaction.deferReply();
   try {
     const response = await requestAiResponse({
       guildId: interaction.guildId,
@@ -432,14 +425,10 @@ async function handleChatInteraction(interaction) {
       text,
     });
     const chunks = splitMessage(response);
-    await (currentPolicy.knowledgeOnly ? interaction.followUp({
-      content: chunks.shift() || "The AI provider returned an empty response.",
-      ephemeral: false,
-      allowedMentions: { parse: [] },
-    }) : interaction.editReply({
+    await interaction.editReply({
       content: chunks.shift() || "The AI provider returned an empty response.",
       allowedMentions: { parse: [] },
-    }));
+    });
     for (const chunk of chunks) {
       await interaction.followUp({
         content: chunk,
@@ -448,14 +437,10 @@ async function handleChatInteraction(interaction) {
     }
   } catch (error) {
     console.error("Chat command failed:", error.message);
-    await (currentPolicy.knowledgeOnly ? interaction.followUp({
-      content: aiErrorMessage(error),
-      ephemeral: false,
-      allowedMentions: { parse: [] },
-    }) : interaction.editReply({
+    await interaction.editReply({
       content: aiErrorMessage(error),
       allowedMentions: { parse: [] },
-    }));
+    });
   }
 }
 
