@@ -2,7 +2,7 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
-  { version: "2.1.0", at: "2026-10-14T23:40:00Z", historical: false, changes: [
+  { version: "2.1.0", at: "2026-10-14T23:45:29Z", historical: false, changes: [
     "Added Connect Patreon in Knowledge Base, with OAuth authorization, separate Discord and Patreon indexing status, and channel visibility controls.",
     "Connected creator post text and resource links can support bot answers and citations. Post notifications and periodic synchronization keep the archive updated; collections do not need to be recreated.",
     "Added Sync now, reconnect, and disconnect controls. A one-time Patreon application setup is required before connecting; media and attachments are not transcribed."
