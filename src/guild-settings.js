@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { readJson, writeJson } = require("./storage");
 const { normalizePolicy } = require("./knowledge-policy");
+const { behaviorSnapshot } = require("../shared/behavior.mjs");
 
 const fixedTimeZones = new Set([
   "UTC", "GMT", "PST", "PDT", "MST", "MDT", "CST", "CDT", "EST", "EDT",
@@ -100,6 +101,8 @@ class GuildSettingsStore {
         bannerPath: "",
       },
       personality: this.defaultPersonality,
+      rules: "",
+      approvedAnswers: [],
       aiProvider: "gemini",
       openAiModel: this.config.openAiModel || "gpt-6-luna",
       openAiSpeed: "auto",
@@ -117,6 +120,7 @@ class GuildSettingsStore {
 
   normalize(value) {
     const defaults = this.createDefault();
+    const behavior = behaviorSnapshot(value || {});
     const profile = value?.profile || {};
     const timeZone = normalizeTimeZone(
       value?.reminderTimeZone,
@@ -132,6 +136,8 @@ class GuildSettingsStore {
       },
       personality:
         cleanText(value?.personality, 12_000) || defaults.personality,
+      rules: behavior.rules,
+      approvedAnswers: behavior.approvedAnswers,
       aiProvider: value?.aiProvider === "openai" ? "openai" : "gemini",
       openAiModel: /^gpt-[a-z0-9.-]{1,40}$/.test(value?.openAiModel || "") ? value.openAiModel : defaults.openAiModel,
       openAiSpeed: ["auto", "default", "fast"].includes(value?.openAiSpeed) ? value.openAiSpeed : "auto",

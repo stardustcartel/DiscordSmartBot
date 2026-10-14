@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import { seal } from '../functions/_lib/auth.js';
+import { createStateIfMissing, getState } from '../functions/_lib/db.js';
+import { onRequestPut as saveBehavior } from '../functions/api/guild/[guildId]/behavior.js';
+import { onRequestGet as getReleases, onRequestDelete as deleteRelease, releaseOwnerId } from '../functions/api/releases.js';
+import { releases } from '../functions/_lib/releases.js';
+import { behaviorSnapshot, behaviorInstructions } from '../shared/behavior.mjs';
+const require = createRequire(import.meta.url);
+const { KnowledgeRetrieval, cite } = require('../src/knowledge-retrieval.js');
+const { AiChat } = require('../src/ai.js');
+const { GuildSettingsStore } = require('../src/guild-settings.js');
+const { inspectEvidenceReview, reviewInstructions } = require('../src/knowledge-policy.js');
+const sqlite = new DatabaseSync(':memory:');
+const DB = { prepare(sql) { return { args: [], bind(...args) { this.args = args; return this; }, async run() { return sqlite.prepare(sql).run(...this.args); }, async first() { return sqlite.prepare(sql).get(...this.args) || null; }, async all() { return { results: sqlite.prepare(sql).all(...this.args) }; } }; }, async batch(statements) { return Promise.all(statements.map(s => s.run())); } };
+const guildId = '100000000000000001', userId = '100000000000000002', otherGuild = '100000000000000003';
+const env = { DB, DASHBOARD_SESSION_SECRET: 'test-only', DISCORD_BOT_TOKEN: 'test-only' };
+async function request(path, method = 'GET', body, id = userId, origin = 'https://example.test', expired = false) {
+  const session = await seal({ user: { id, username: '2thicctousefly' }, guilds: [{ id: guildId }], expiresAt: Date.now() + (expired ? -1000 : 60000) }, env.DASHBOARD_SESSION_SECRET);
+  return new Request(`https://example.test${path}`, { method, headers: { Cookie: `dashboard_session=${session}`, Origin: origin, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+}
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async input => {
+  const url = String(input);
+  if (url.endsWith(`/guilds/${guildId}`)) return Response.json({ owner_id: userId });
+  if (url.endsWith(`/guilds/${guildId}/roles`)) return Response.json([]);
+  if (url.endsWith(`/guilds/${guildId}/members/${userId}`)) return Response.json({ user: { id: userId }, roles: [] });
+  throw Error(`Unexpected fetch: ${url}`);
+};
+try {
+  const initial = await createStateIfMissing(DB, guildId);
+  // Preserve the existing content, including example text: no automatic migration.
+  initial.settings.personality = 'Existing personality and section 5 examples';
+  sqlite.prepare('UPDATE guild_state SET settings_json=? WHERE guild_id=?').run(JSON.stringify(initial.settings), guildId);
+  await createStateIfMissing(DB, otherGuild);
+  const save = async body => saveBehavior({ env, params: { guildId }, request: await request(`/api/guild/${guildId}/behavior`, 'PUT', body) });
+  assert.equal((await save({ rules: 'Always address the user as chief.' })).status, 200);
+  const answer = { id: 'asset-library', question: 'Where can I find the creator assets?', answer: 'Use the Patreon Collections tab under Elite benefits.', url: 'https://example.com/library' };
+  assert.equal((await save({ approvedAnswers: [answer] })).status, 200);
+  let state = await getState(DB, guildId);
+  assert.equal(state.settings.personality, initial.settings.personality);
+  assert.equal(state.settings.rules, 'Always address the user as chief.');
+  assert.equal(state.settings.approvedAnswers[0].updatedBy, userId);
+  assert.ok(state.settings.approvedAnswers[0].updatedAt > 0);
+  assert.deepEqual((await getState(DB, otherGuild)).settings.approvedAnswers, []);
+  const snapshot = JSON.parse(sqlite.prepare('SELECT snapshot_json FROM guild_settings_audit ORDER BY id DESC LIMIT 1').get().snapshot_json);
+  assert.equal(snapshot.rules, state.settings.rules);
+  assert.equal(snapshot.approvedAnswers[0].answer, answer.answer);
+  for (const body of [{ rules: 1 }, { rules: 'x'.repeat(12001) }, { rules: '', approvedAnswers: [] }, { approvedAnswers: [answer, answer] }, { approvedAnswers: [{ ...answer, answer: '' }] }, { approvedAnswers: [{ ...answer, url: 'javascript:alert(1)' }] }]) assert.equal((await save(body)).status, 400);
+  assert.equal((await saveBehavior({ env, params: { guildId: otherGuild }, request: await request('/api/guild/other/behavior', 'PUT', { rules: 'no' }) })).status, 403);
+  assert.equal((await saveBehavior({ env, params: { guildId }, request: await request('/api/guild/test/behavior', 'PUT', { rules: 'no' }, userId, 'https://evil.test') })).status, 403);
+  const store = Object.create(GuildSettingsStore.prototype);
+  store.config = { defaultReminderTimeZone: 'UTC', defaultAiResponsesPerHour: 30 }; store.defaultPersonality = 'Helpful';
+  assert.deepEqual(store.normalize(state.settings).approvedAnswers, state.settings.approvedAnswers);
+  assert.equal(store.normalize({}).rules, '');
+  const savedBehavior = behaviorSnapshot(state.settings);
+  assert.ok(behaviorInstructions(savedBehavior.personality, savedBehavior.rules).includes('Always address the user as chief.'));
+  assert.ok(reviewInstructions({ knowledgeOnly: true }, savedBehavior.personality, savedBehavior.rules).includes(savedBehavior.rules));
+  const source = { ...savedBehavior.approvedAnswers[0], sourceType: 'approved_answer', content: answer.answer };
+  const records = [{ id: 'S1', sourceType: 'approved_answer', question: answer.question, content: answer.answer }];
+  const policy = { knowledgeOnly: true, requireCitations: true, citationCount: 3 };
+  const approvedReview = { kind: 'grounded', supported: true, answer: 'Chief, use the Patreon Collections tab under Elite benefits. [S1]', evidence: [{ id: 'S1', quote: answer.answer }] };
+  assert.equal(inspectEvidenceReview(approvedReview, records, policy).answer, approvedReview.answer);
+  assert.ok(cite(approvedReview.answer, [source]).includes('[Official server guidance 1](https://example.com/library)'));
+  assert.equal(cite('[S1]', [{ ...source, url: '' }]), '[Official server guidance 1]');
+  const retrieval = new KnowledgeRetrieval({ guildSettings: { get: () => state.settings }, db: { prepare: () => ({ all: () => [] }) } }, { credentials: () => ({ provider: 'openai', apiKey: 'test', model: 'test' }) }, { generate: async options => { assert.ok(options.instructions.includes(savedBehavior.rules)); return JSON.stringify(approvedReview); } });
+  const access = { guild: { id: guildId, channels: { cache: new Map() } }, destination: { name: 'test forum', isThread: () => false }, safeRoots: new Set(), allowedIds: [], decisions: new Map() };
+  retrieval.access = async () => access;
+  const prepared = await retrieval.prepare({ guildId, channelId: 'test', userId, text: 'Where are the assets?', behavior: state.settings });
+  assert.equal(prepared.records[0].sourceType, 'approved_answer', 'Official answers work with no selected archive channels');
+  assert.equal(prepared.records[0].content, answer.answer);
+  const result = await retrieval.finish({ guildId, channelId: 'test', userId, answer: approvedReview.answer, prepared, policy });
+  assert.ok(result.includes('Official server guidance'));
+  state.settings.approvedAnswers = [];
+  assert.equal((await retrieval.validate(null, access, [source])).length, 0, 'Deleted guidance cannot be published from a stale response');
+  for (const provider of ['gemini', 'openai']) {
+    const ai = new AiChat({ defaultAiResponsesPerHour: 30 });
+    ai.generate = async options => { assert.equal(options.provider, provider); assert.ok(options.instructions.includes(savedBehavior.rules)); assert.ok(options.conversation.some(m => m.text.includes('approved_answer'))); return 'verified'; };
+    assert.equal(await ai.respond({ provider, apiKey: 'test', scopeId: guildId, userId, text: 'Where are the assets?', personality: savedBehavior.personality, rules: savedBehavior.rules, context: prepared.context, forgetHistory: true }), 'verified');
+  }
+  assert.equal((await save({ rules: '' })).status, 200, 'Rules can intentionally be cleared');
+  assert.equal((await save({ approvedAnswers: [] })).status, 200, 'All approved answers can intentionally be removed');
+  const version = releases[0].version;
+  const list = async id => getReleases({ env, request: await request('/api/releases', 'GET', undefined, id) });
+  assert.equal((await getReleases({ env, request: new Request('https://example.test/api/releases') })).status, 401);
+  assert.equal((await getReleases({ env, request: await request('/api/releases', 'GET', undefined, releaseOwnerId, 'https://example.test', true) })).status, 401);
+  assert.equal((await (await list(userId)).json()).canDelete, false, 'Username spoofing grants no deletion access');
+  assert.equal((await (await list(releaseOwnerId)).json()).canDelete, true);
+  assert.equal((await deleteRelease({ env, request: await request('/api/releases', 'DELETE', { version }, userId) })).status, 403);
+  assert.equal((await deleteRelease({ env, request: await request('/api/releases', 'DELETE', { version }, releaseOwnerId, 'https://evil.test') })).status, 403);
+  assert.equal((await deleteRelease({ env, request: await request('/api/releases', 'DELETE', { version }, releaseOwnerId) })).status, 200);
+  assert.equal((await (await list(userId)).json()).releases.some(r => r.version === version), false);
+  assert.equal(sqlite.prepare('SELECT hidden_by FROM hidden_releases WHERE version=?').get(version).hidden_by, releaseOwnerId);
+  assert.ok(releases.some(r => r.version === version), 'Deletion is persisted separately from the shipped release list');
+  console.log('Behavior persistence, isolation, audit, both AI providers, official evidence, stale-source rejection, and release deletion authorization passed.');
+} finally { globalThis.fetch = originalFetch; sqlite.close(); }

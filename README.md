@@ -53,7 +53,7 @@ one server. Direct messages cannot be safely attributed to a customer's key.
 
 ## Oracle deployment
 
-On the Oracle VM, install Node.js 20 or newer and clone the repository:
+On the Oracle VM, install Node.js 22.13 or newer and clone the repository:
 
     git clone https://github.com/stardustcartel/DiscordSmartBot.git /home/ubuntu/discord-smart-bot
     cd /home/ubuntu/discord-smart-bot
@@ -86,6 +86,20 @@ Install and start the service:
 
 If your Oracle login is not ubuntu, update the User, WorkingDirectory, and
 EnvironmentFile fields in the service file before installing it.
+
+## Behavior and release history
+
+AI Integration → Behavior has three independently saved sections:
+
+- **Personality:** voice, tone, and presentation preferences. Existing personality text is preserved; administrators reorganize it themselves.
+- **Rules:** requirements such as mandatory disclaimers or forms of address. Rules override conflicting personality preferences, but cannot bypass source permissions or evidence checks. Empty rules can be saved to clear them.
+- **Approved answers:** up to 40 administrator-provided question/topic and answer pairs (24,000 total characters), with optional HTTPS resource links. Matching is semantic rather than a hardcoded keyword trigger. These records are sent alongside retrieved messages to both providers and the evidence reviewer. Relevant approved guidance takes precedence over conflicting archived discussions; unrelated guidance must not be used. They are available throughout that server's response channels, including Knowledge-backed mode, and citations identify them as official server guidance rather than invented Discord messages.
+
+Behavior changes travel through the existing dashboard sync and settings audit. Source validation rejects approved answers removed or changed during generation. All approved answers are included in context (within the limits above), so adding extensive guidance increases API token usage. Personality or Rules examples alone do not become factual evidence: put official factual answers in Approved answers.
+
+Help & updates contains Version History and Support. Releases live in `functions/_lib/releases.js`; add an entry for each meaningful deployment as specified in `AGENTS.md`. Historical entries are explicitly marked as reconstructed, not verified deployment timestamps. Only signed-in Discord ID `1079143480988799046` can delete an entry, enforced by `/api/releases`. D1 `hidden_releases` stores permanent deletion markers separately from shipped entries. The endpoint creates this table if needed; migration `0007_version_history.sql` is also supplied. Deletion removes an entry globally, not the deployed software.
+
+Run `npm run check:behavior` alongside the existing checks before deployment. No existing personality or approved guidance is migrated automatically.
 
 ## Security and product direction
 

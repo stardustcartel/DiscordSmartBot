@@ -16,6 +16,8 @@ export function settingsAuditSnapshot(settings = {}, geminiSecret = null, openai
       bannerConfigured: Boolean(profile.bannerKey || profile.bannerPath),
     },
     personality: settings.personality || "",
+    rules: settings.rules || "",
+    approvedAnswers: settings.approvedAnswers || [],
     aiProvider: settings.aiProvider || "gemini",
     openAiModel: settings.openAiModel || "",
     openAiSpeed: settings.openAiSpeed || "auto",

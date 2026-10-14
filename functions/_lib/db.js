@@ -3,6 +3,8 @@ import { prepareAuditInsert, settingsAuditSnapshot, auditPermissions } from "./s
 const defaultSettings = {
   profile: { nickname: "", bio: "", avatarPath: "", bannerPath: "", avatarKey: "", bannerKey: "" },
   personality: "You are a helpful, friendly Discord assistant.",
+  rules: "",
+  approvedAnswers: [],
   aiProvider: "gemini",
   openAiModel: "gpt-6-luna",
   openAiSpeed: "auto",

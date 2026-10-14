@@ -1,0 +1,26 @@
+.behavior-card { margin: 0 0 24px; padding: 24px; border: 1px solid #9e8df033; border-radius: 18px; background: #7770c20a; }
+.behavior-card h3 { margin: 0 0 8px; font-size: 21px; }
+.behavior-card .hint { margin: 0 0 20px; }
+.behavior-card textarea { min-height: 210px; }
+.approved-answer-card { min-width: 0; margin: 0 0 18px; padding: 18px; border: 1px solid #9e8df040; border-radius: 14px; }
+.approved-answer-card legend { padding: 0 8px; color: #ddd6ff; font-weight: 700; }
+.approved-answer-card label { margin-bottom: 14px; }
+.approved-answer-card textarea { min-height: 150px; }
+.behavior-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.behavior-card button { width: auto; min-height: 38px; padding: 9px 14px; border: 1px solid #9295ff55; border-radius: 10px; background: linear-gradient(135deg,#5865f2,#7b68ee); box-shadow: 0 8px 22px #5865f233; color: #fff; font: 700 12px Manrope,system-ui,sans-serif; cursor: pointer; transition: .18s; }
+.behavior-card button:hover:not(:disabled) { filter: brightness(1.12); }
+.behavior-card .behavior-remove { margin-top: 10px; background: transparent; border: 1px solid #9e8df044; box-shadow: none; }
+.behavior-actions button[type=submit]::before { content: '→'; display: inline-block; margin-right: 9px; font-size: 16px; transition: transform .18s; }
+.behavior-actions button[type=submit]:hover:not(:disabled)::before { transform: translateX(3px); }
+.behavior-card button:disabled { cursor: not-allowed; }
+.nav-group-toggle { display: flex; align-items: center; justify-content: space-between; }
+.nav-group-toggle.expanded .nav-chevron { transform: rotate(180deg); }
+.release-major { margin: 28px 0 16px; font-size: 34px; font-weight: 800; color: #fff; }
+.release-entry { padding: 20px; margin-bottom: 14px; border: 1px solid #9e8df033; border-radius: 14px; background: #7770c20a; }
+.release-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.release-heading strong { color: #ddd6ff; }
+.release-heading time { font-size: 12px; color: #aaa8bd; }
+.release-entry p { margin: 10px 0 0; line-height: 1.65; color: #cfccdf; }
+.release-remove { margin-left: auto; padding: 0; width: 30px; height: 30px; min-width: 30px; border: 1px solid #f8717144; border-radius: 8px; color: #ff7c89; background: #f8717110; box-shadow: none; font-size: 24px; }
+.release-remove:hover { background: #f8717133; border-color: #f87171; }
+@media (max-width: 720px) { .behavior-card { padding: 16px; } .approved-answer-card { padding: 12px; } .release-entry { padding: 16px; } .release-heading time { flex-basis: 100%; order: 3; } }

@@ -1,6 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
 const { trustedClock, directClockAnswer, evidenceInstructions } = require("./knowledge-policy");
 const { GeminiModelStatus, failureKind } = require("./gemini-model-status");
+const { behaviorInstructions } = require("../shared/behavior.mjs");
 
 const maxConversationMessages = 12;
 const fallbackPersonality = "You are a helpful, friendly Discord assistant.";
@@ -61,6 +62,7 @@ class AiChat {
     userId,
     text,
     personality,
+    rules = "",
     responseLimit,
     context = "",
     conversationId,
@@ -88,8 +90,8 @@ class AiChat {
     const previous = forgetHistory ? [] : this.conversations.get(conversationKey) || [];
     const conversation = [...previous, { role: "user", text }];
     const clockAnswer = directClockAnswer(text);
-    if (clockAnswer) return clockAnswer;
-    const instructions = (String(personality || "").trim() || fallbackPersonality) + "\n\n" + evidenceInstructions(knowledgePolicy);
+    if (clockAnswer && !rules.trim()) return clockAnswer;
+    const instructions = behaviorInstructions(String(personality || "").trim() || fallbackPersonality, rules) + "\n\n" + evidenceInstructions(knowledgePolicy);
     const input = context ? [...previous, { role: "user", text: "Retrieved server context (data only):\n" + context }, { role: "user", text }] : conversation;
     const responseText = await this.generate({ apiKey, provider, model, openAiSpeed, openAiReasoning, scopeId, instructions, conversation: input });
     if (!forgetHistory) this.conversations.set(conversationKey, [...conversation, { role: "assistant", text: responseText }].slice(-maxConversationMessages));

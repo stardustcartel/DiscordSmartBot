@@ -50,6 +50,7 @@ function updateSaveButtons() {
   set("#permission-role-form button[type=submit]", Boolean(permissionRoleId));
   set("#announcement-save", !$("#announcement-save").hidden && $("#announcement-editor").value !== announcementModalState.initialValue && Boolean($("#announcement-editor").value.trim()));
   if (typeof updateKnowledgeSaveButtons === "function") updateKnowledgeSaveButtons();
+  if (typeof updateBehaviorSaveButtons === "function") updateBehaviorSaveButtons();
 }
 const dataUrl = (file) => new Promise((resolve, reject) => { if (!file) return resolve(""); const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
 const subscriptionKey = (subscription) => `${subscription.youtubeChannelId}:${subscription.destinationChannelId}`;
@@ -283,13 +284,14 @@ function showWorkspace(tab = "overview") {
   $("#server-screen").hidden = true; $("#workspace").hidden = false;
   $("#personality-tab").hidden = true;
   $("#knowledge-tab").hidden = true;
+  setHelpExpanded(false);
   knowledgeDirty = false;
   knowledgePolicyDirty = false;
   knowledgePolicyGuild = null;
   $("#knowledge-form").inert = true;
   $("#knowledge-policy-form").inert = true;
   closeKnowledgeMenu();
-  document.querySelectorAll(".tab,.panel").forEach((element) => element.classList.remove("active"));
+  document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active"));
   $(`.tab[data-tab="${tab}"]`)?.classList.add("active"); $(`#${tab}`)?.classList.add("active");
   requestAnimationFrame(updateMobileNavHint);
 }
@@ -299,12 +301,14 @@ function showTab(tab) {
   $("#personality-tab").hidden = !aiSection;
   $("#knowledge-tab").hidden = !aiSection;
   const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`);
-  if (button?.disabled) return toast("Connect a valid AI key to unlock Personality.");
+  if (button?.disabled) return toast("Connect a valid AI key to unlock Behavior.");
+  setHelpExpanded(["support", "version-history"].includes(tab));
   document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active"));
   button?.classList.add("active");
   $("#gemini-tab")?.classList.toggle("expanded", aiSection);
   $(`#${tab}`)?.classList.add("active");
   if (tab === "permissions") loadPermissions().catch((error) => toast(error.message));
+  if (tab === "version-history") loadVersionHistory();
   if (tab === "knowledge") loadKnowledge().catch((error) => toast(error.message));
   else closeKnowledgeMenu();
   requestAnimationFrame(updateMobileNavHint);
@@ -375,6 +379,7 @@ async function loadSettings() {
   settings = data.settings;
   settingsLoadedGuild = guildId;
   $("#personality-form [name=personality]").value = settings.personality || "";
+  loadBehaviorFields();
   $("#profile-editor [name=nickname]").value = settings.profile?.nickname || ""; $("#profile-editor [name=bio]").value = settings.profile?.bio || "";
   renderProfilePreview(settings.profile, data.version);
   renderGeminiKeyStatus(data);
@@ -508,6 +513,7 @@ $("#logout").onclick = () => { location = "/auth/logout"; };
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
 document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
+$("#help-tab").onclick = () => setHelpExpanded($("#help-tab").getAttribute("aria-expanded") !== "true");
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = (event) => { if (button.tagName === "A") event.preventDefault(); showTab(button.dataset.open); }; });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); const value = event.target.personality.value; try { await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: value }) }); settings.personality = value; updateSaveButtons(); toast("Personality saved."); } catch (error) { toast(error.message || "Could not save personality."); } };
 $("#gemini-form").onsubmit = async (event) => { event.preventDefault(); try { const result = await api(`/api/guild/${selected}/gemini`, { method: "PUT", body: JSON.stringify({ apiKey: event.target.apiKey.value }) }); event.target.reset(); setPersonalityLock(false); await loadSettings(); toast(result.message || "Gemini key verified and saved."); } catch (error) { toast(error.message || "That Gemini key could not be verified."); } };
@@ -626,5 +632,6 @@ for (const id of ["personality-form", "gemini-form", "openai-form", "provider-fo
 }
 setupMobileNavigationHint();
 setupKnowledge();
+setupBehavior();
 updateSaveButtons();
 load();

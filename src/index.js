@@ -380,15 +380,11 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
   const destination = guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
   const policy = effectivePolicy(settings.knowledgePolicy, destination);
   let prepared;
-  if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || policy.knowledgeOnly || policy.requireCitations)) {
+  if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
-    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId });
-    if (policy.knowledgeOnly && !prepared.sources.length) {
-      if (["relevance_review_unavailable", "selected_sources_unavailable_on_live_check"].includes(prepared.searchOutcome)) return "I couldn't complete the knowledge search right now. Please try again in a moment.";
-      return simpleGreeting(text) ? "Hi! What would you like to know about this server?" : insufficientEvidence;
-    }
+    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId, behavior: settings });
   }
   const response = await ai.respond({
     apiKey,
@@ -400,6 +396,7 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
     userId,
     text,
     personality: settings.personality,
+    rules: settings.rules,
     responseLimit: settings.aiResponsesPerHour,
     conversationId: channelId,
     context: prepared?.context,

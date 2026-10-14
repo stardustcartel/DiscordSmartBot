@@ -123,7 +123,7 @@ async function main() {
   assert.equal(trace.embeddingSearch.vector.length, 768);
   assert.ok(trace.embeddingSearch.matches.some((match) => match.messageId === guidance.id));
   assert.deepEqual(JSON.parse(trace.sentToAnswerModel.context).sources, prepared.records);
-  assert.equal(fs.statSync(tracePath).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(tracePath).mode & 0o777, 0o600);
   assert.ok(prepared.sources.some((m) => m.id === guidance.id), "Imprecise question retrieves evidence through reformulation/semantic search");
   const sourceNumber = prepared.sources.findIndex((m) => m.id === guidance.id) + 1;
   const answer = await fullRetrieval.finish({ client, guildId, channelId: otherRoot, userId, prepared, answer: `Use a fifty millimeter lens [S${sourceNumber}]` });

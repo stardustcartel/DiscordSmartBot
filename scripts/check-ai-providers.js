@@ -49,7 +49,7 @@ async function main() {
   const args = { provider: "openai", apiKey: reloaded.getOpenAiKey(guildId), scopeId: guildId, userId: "user", personality: "Be cheerful.", responseLimit: 30 };
   assert.equal(await ai.respond({ ...args, text: "Hi" }), "Hello from OpenAI");
   assert.equal(requests[0].body.model, "gpt-6-luna");
-  assert.ok(requests[0].body.instructions.startsWith("Be cheerful."));
+  assert.ok(requests[0].body.instructions.includes("PERSONALITY (voice and presentation preferences):\nBe cheerful."));
   assert.ok(requests[0].body.instructions.includes("Trusted runtime clock:"));
   assert.ok(requests[0].body.instructions.includes("timestamp does not establish today's date"));
   assert.equal(requests[0].body.store, false);
