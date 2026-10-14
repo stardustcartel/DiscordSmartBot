@@ -22,6 +22,7 @@ const { GuildSecretsStore } = require("./guild-secrets");
 const { KnowledgeBase } = require("./knowledge");
 const { KnowledgeIndexer } = require("./knowledge-indexer");
 const { KnowledgeRetrieval } = require("./knowledge-retrieval");
+const { PatreonKnowledge } = require("./patreon");
 const { effectivePolicy, directClockAnswer, simpleGreeting, insufficientEvidence } = require("./knowledge-policy");
 const { ReminderStore } = require("./reminders");
 const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
@@ -50,6 +51,8 @@ const ai = new AiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
 const knowledgeIndexer = new KnowledgeIndexer(knowledge, guildSettings, guildSecrets);
 const knowledgeRetrieval = new KnowledgeRetrieval(knowledge, knowledgeIndexer, ai, config.dataDirectory);
+const patreon = new PatreonKnowledge(config, knowledge, knowledgeIndexer, ai);
+knowledgeRetrieval.patreon = patreon;
 const reminders = new ReminderStore({
   ...config,
   reminderDefaultTimeZone: config.defaultReminderTimeZone,
@@ -380,7 +383,7 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
   const destination = guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
   const policy = effectivePolicy(settings.knowledgePolicy, destination);
   let prepared;
-  if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || policy.knowledgeOnly || policy.requireCitations)) {
+  if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || knowledge.checkpoint(`patreon:${guildId}`)?.generation || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
@@ -1062,6 +1065,7 @@ client.once(Events.ClientReady, (readyClient) => {
     dashboard.start();
     dashboardSync.start(client);
     knowledgeIndexer.start(client);
+    patreon.start(client);
   })().catch((error) => {
     console.error("Bot startup failed:", error.message);
     client.destroy();
@@ -1129,6 +1133,7 @@ client.on(Events.ThreadCreate, (thread) => {
 
 function shutdown() {
   knowledgeIndexer.stop();
+  patreon.stop();
   reminders.stop();
   youtube.stop();
   client.destroy();

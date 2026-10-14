@@ -1,0 +1,14 @@
+#patreon-card { margin-top: 30px; padding: 24px; border: 1px solid #9e8df044; border-radius: 18px; background: linear-gradient(145deg,#24203c,#151421); }
+#patreon-card h3 { margin: 0 0 10px; }
+#patreon-connected { margin-top: 20px; }
+.patreon-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+.patreon-actions .button, #patreon-connect { background: linear-gradient(135deg,#7062ee,#8a70ed); }
+#patreon-card button:disabled { opacity: .55; cursor: not-allowed; }
+#patreon-card .patreon-disconnect { background: transparent; border: 1px solid #9e8df055; }
+#patreon-status { border-top: 1px solid #9e8df033; padding-top: 20px; margin-top: 24px; }
+#patreon-status h4 { margin: 0 0 10px; font-size: 15px; }
+#patreon-status-time { color: #aaa8bd; }
+#patreon-warning { color: #e5c3a5; line-height: 1.6; }
+#patreon-channel-options { position: static; margin-top: 8px; max-height: 260px; width: 100%; }
+#patreon-visibility-save { color: #fff; }
+@media (max-width: 720px) { #patreon-card { padding: 16px; } }

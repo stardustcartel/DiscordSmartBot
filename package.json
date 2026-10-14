@@ -1,10 +1,11 @@
 {
   "name": "discord-smart-bot",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "A shared Discord bot with per-server Gemini or OpenAI settings",
   "main": "src/index.js",
   "scripts": {
+    "check:patreon": "node --check dashboard/patreon.js && node --check src/patreon.js && node --no-warnings scripts/check-patreon.mjs",
     "check:behavior": "node --check dashboard/behavior.js && node --check dashboard/releases.js && node --check functions/api/releases.js && node --check functions/api/guild/[guildId]/behavior.js && node --check shared/behavior.mjs && node --no-warnings scripts/check-behavior.mjs",
     "start": "node src/index.js",
     "check": "node --check src/index.js && node --check src/bot-response.js && node --check src/config.js && node --check src/storage.js && node --check src/guild-settings.js && node --check src/guild-secrets.js && node --check src/knowledge.js && node --check src/reminders.js && node --check src/youtube.js && node --check src/dashboard.js && node --check src/dashboard-sync.js && node --check src/settings-audit.js && node --check src/ai.js && node --check scripts/print-invite-url.js && node --check scripts/generate-secrets-key.js && node --check scripts/set-guild-gemini-key.js && node --check scripts/check-gemini-key-history.js && node --check scripts/check-ai-providers.js && node --check functions/_lib/authorize.js && node --check functions/_lib/db.js && node --check functions/_lib/settings-audit.js && node --check functions/_lib/gemini-secret.js && node --check functions/_lib/openai-models.js && node --check functions/api/me.js && node --check functions/auth/invite.js && node --check functions/auth/callback.js && node --check functions/auth/logout.js && node --check functions/api/guild/[guildId]/youtube.js && node --check functions/api/guild/[guildId]/permissions.js && node --check functions/api/guild/[guildId]/bot-access.js && node --check functions/api/guild/[guildId]/gemini.js && node --check functions/api/guild/[guildId]/openai.js && node --check functions/api/guild/[guildId]/openai-model.js && node --check functions/api/guild/[guildId]/openai-options.js && node --check functions/api/guild/[guildId]/ai-provider.js && node --check functions/api/guild/[guildId]/settings.js && node --check dashboard/app.js && node --check src/knowledge-indexer.js && node --check src/knowledge-retrieval.js && node --check src/knowledge-permissions.js && node --check src/knowledge-embeddings.js && node --check dashboard/knowledge.js && node --check functions/api/guild/[guildId]/knowledge.js",
@@ -25,7 +26,9 @@
   },
   "dependencies": {
     "@google/genai": "^1.52.0",
+    "crypto-js": "^4.2.0",
     "discord.js": "^14.21.0",
-    "dotenv": "^17.2.1"
+    "dotenv": "^17.2.1",
+    "html-to-text": "^10.0.1"
   }
 }

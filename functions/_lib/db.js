@@ -10,6 +10,7 @@ const defaultSettings = {
   openAiSpeed: "auto",
   openAiReasoning: "auto",
   knowledgeChannelIds: [],
+  patreonChannelIds: [],
   knowledgePolicy: { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [] },
   botResponseChannelIds: [],
   botAutoResponseChannelIds: [],

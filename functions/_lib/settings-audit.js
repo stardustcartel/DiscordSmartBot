@@ -25,6 +25,7 @@ export function settingsAuditSnapshot(settings = {}, geminiSecret = null, openai
     geminiKey: keyStatus(geminiSecret),
     openAiKey: keyStatus(openaiSecret),
     knowledgeChannelIds: settings.knowledgeChannelIds || [],
+    patreonChannelIds: settings.patreonChannelIds || [],
     knowledgePolicy: settings.knowledgePolicy || {},
     botResponseChannelIds: settings.botResponseChannelIds || [],
     botAutoResponseChannelIds: settings.botAutoResponseChannelIds || [],

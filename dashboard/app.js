@@ -343,6 +343,14 @@ async function load() {
     $("#server-screen").classList.toggle("no-connected", !me.guilds.length);
     if (!me.guilds.length) { $("#signed-out").hidden = true; $("#empty-servers").hidden = false; return; }
     renderServers(me.guilds);
+    const returned = new URLSearchParams(location.search);
+    if (returned.has("patreon")) {
+      const guild = me.guilds.find(item => item.id === returned.get("guild"));
+      if (guild) { await selectGuild(guild.id, guild); showTab("knowledge"); }
+      const outcome = returned.get("patreon");
+      toast(outcome === "connected" ? "Patreon connected. Your posts will begin importing shortly." : outcome === "cancelled" ? "Patreon connection cancelled." : outcome === "no-campaign" ? "Sign in with the Patreon creator account to connect its posts." : outcome === "already-connected" ? "Disconnect the current Patreon before linking a different creator." : outcome === "multiple-campaigns" ? "This account has multiple campaigns. Contact support to select the correct campaign." : "Patreon could not be connected. Please try again.");
+      history.replaceState(null, "", location.pathname);
+    }
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
 }
 function formatGeminiKeyEvent(event) {
@@ -633,5 +641,6 @@ for (const id of ["personality-form", "gemini-form", "openai-form", "provider-fo
 setupMobileNavigationHint();
 setupKnowledge();
 setupBehavior();
+setupPatreon();
 updateSaveButtons();
 load();
