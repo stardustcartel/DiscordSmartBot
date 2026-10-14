@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
 import { createHmac } from 'node:crypto';
+import { hmacMd5 } from '../functions/_lib/hmac-md5.js';
 import { seal } from '../functions/_lib/auth.js';
 import { createStateIfMissing } from '../functions/_lib/db.js';
 import { schema, connection, cleanPost, api as patreonApi } from '../functions/_lib/patreon.js';
@@ -44,6 +45,8 @@ globalThis.fetch = async (input, options = {}) => {
   throw Error('Unexpected test request '+url.pathname);
 };
 try {
+  assert.equal(hmacMd5('The quick brown fox jumps over the lazy dog', 'key'), '80070713463e7749b90c2dc24911e275', 'HMAC-MD5 matches the standard test vector');
+  for (const [message, key] of [['Patreon webhook bytes ✓', 'short key'], ['x'.repeat(137), 'long key '.repeat(12)]]) assert.equal(hmacMd5(new TextEncoder().encode(message), key), createHmac('md5', key).update(message).digest('hex'), 'HMAC-MD5 matches Node crypto for UTF-8 and long inputs');
   await createStateIfMissing(DB, guildId); await schema(DB);
   assert.equal((await runAction(null)).status, 400);
   assert.equal((await action({ env, params: { guildId }, request: request('/api/guild/test/patreon', { action: 'connect' }, { Origin: 'https://evil.test' }) })).status, 403);
@@ -76,7 +79,7 @@ try {
   const raw = JSON.stringify({ data: post });
   const sendHook = signature => webhook({ env, params: { key: row.hook_key }, request: new Request('https://example.test/hook', { method: 'POST', headers: { 'X-Patreon-Signature': signature, 'X-Patreon-Event': 'posts:update' }, body: raw }) });
   assert.equal((await sendHook('bad')).status, 401);
-  assert.equal((await sendHook(createHmac('md5', 'webhook-fixture').update(raw).digest('hex'))).status, 200);
+  assert.equal((await sendHook(hmacMd5(raw, 'webhook-fixture'))).status, 200);
   assert.equal((await (await runInternal({ action: 'meta' })).json()).events.length, 1);
   // Refresh through the same stored connection; no token material in public responses.
   await patreonApi(env, { ...row, expires_at: 0 }, '/campaigns'); assert.equal(tokenCalls, 2);

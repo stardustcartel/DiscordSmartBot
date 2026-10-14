@@ -1,4 +1,4 @@
-import HmacMD5 from 'crypto-js/hmac-md5.js';
+import { hmacMd5 } from '../../../_lib/hmac-md5.js';
 import { decryptGuildKey } from '../../../_lib/gemini-secret.js';
 import { schema } from '../../../_lib/patreon.js';
 
@@ -6,15 +6,15 @@ export async function onRequestPost({ env, request, params }) {
   await schema(env.DB);
   const row = await env.DB.prepare('SELECT * FROM patreon_connections WHERE hook_key=?').bind(params.key).first();
   if (!row?.webhook_secret) return new Response('Not found', { status: 404 });
-  const raw = await request.text();
+  const raw = new Uint8Array(await request.arrayBuffer());
   if (raw.length > 2000000) return new Response('Too large', { status: 413 });
   const secret = await decryptGuildKey(JSON.parse(row.webhook_secret), env.GUILD_SECRETS_KEY);
-  const expected = HmacMD5(raw, secret).toString();
+  const expected = hmacMd5(raw, secret);
   const supplied = request.headers.get('X-Patreon-Signature') || '';
   let mismatch = supplied.length ^ expected.length;
   for (let i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ (supplied.charCodeAt(i) || 0);
   if (mismatch) return new Response('Unauthorized', { status: 401 });
-  let payload; try { payload = JSON.parse(raw); } catch { return new Response('Invalid payload', { status: 400 }); }
+  let payload; try { payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)); } catch { return new Response('Invalid payload', { status: 400 }); }
   const kind = request.headers.get('X-Patreon-Event');
   if (!['posts:publish','posts:update','posts:delete'].includes(kind)) return new Response('Ignored');
   const records = Array.isArray(payload.data) ? payload.data : [payload.data];
