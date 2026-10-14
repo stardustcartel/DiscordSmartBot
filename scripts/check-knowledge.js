@@ -65,6 +65,11 @@ async function main() {
   const history = Array.from({ length: 250 }, (_, i) => message(i + 1000, `History message ${i}`));
   thread.messages = { fetch: async (opts) => {
     if (opts.message) { if (live.has(opts.message)) return live.get(opts.message); throw Object.assign(new Error("deleted"), { code: 10008 }); }
+    if (opts.around) {
+      const all = [...new Map([...history, ...live.values()].map((m) => [m.id, m])).values()].sort((a, b) => Number(a.id) - Number(b.id));
+      const center = all.findIndex((m) => m.id === opts.around);
+      return new Collection(all.slice(Math.max(0, center - 49), Math.max(0, center - 49) + opts.limit).map((m) => [m.id, m]));
+    }
     let batch = history.filter((m) => (!opts.before || BigInt(m.id) < BigInt(opts.before)) && (!opts.after || BigInt(m.id) > BigInt(opts.after)));
     batch.sort((a, b) => opts.after ? Number(a.id) - Number(b.id) : Number(b.id) - Number(a.id));
     return new Collection(batch.slice(0, opts.limit).map((m) => [m.id, m]));

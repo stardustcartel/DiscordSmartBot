@@ -97,10 +97,11 @@ class AiChat {
     return responseText;
   }
 
-  async generate({ apiKey, provider, model, openAiSpeed = "auto", openAiReasoning = "auto", scopeId, instructions, conversation, maxOutputTokens = 1200, timeoutMs, textFormat }) {
+  async generate({ apiKey, provider, model, openAiSpeed = "auto", openAiReasoning = "auto", scopeId, instructions, conversation, maxOutputTokens = 1200, timeoutMs, textFormat, onModelAttempt }) {
     instructions = String(instructions || "") + "\n\n" + trustedClock();
     if (provider === "openai") {
       const selectedModel = model || this.config.openAiModel || "gpt-6-luna";
+      onModelAttempt?.(selectedModel);
       const supportsNoReasoning = /^(gpt-5\.5|gpt-5\.4-mini|gpt-6-luna|gpt-6-sol|gpt-5\.6-(?:sol|terra|luna))$/.test(selectedModel);
       const supportedReasoning = selectedModel === "gpt-5.5-pro" ? ["medium", "high", "xhigh"] : ["low", "medium", "high", ...(supportsNoReasoning ? ["none"] : []), ...(["gpt-5.5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"].includes(selectedModel) ? ["xhigh"] : []), ...(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"].includes(selectedModel) ? ["max"] : [])];
       const reasoningEffort = openAiReasoning !== "auto" && supportedReasoning.includes(openAiReasoning) ? openAiReasoning : selectedModel === "gpt-5.5-pro" ? "high" : supportsNoReasoning ? "none" : "low";
@@ -121,7 +122,7 @@ class AiChat {
         }),
         signal: AbortSignal.timeout(timeoutMs || (selectedModel === "gpt-5.5-pro" || ["high", "xhigh", "max"].includes(reasoningEffort) ? 180000 : reasoningEffort === "medium" ? 90000 : 45000)),
       });
-      if (!response.ok) throw new Error(`OpenAI returned HTTP ${response.status}.`);
+      if (!response.ok) throw Object.assign(new Error(`OpenAI returned HTTP ${response.status}.`), { status: response.status });
       const result = await response.json();
       if (result.status === "incomplete" || result.status === "failed") {
         const error = new Error("OpenAI did not complete the response.");
@@ -145,6 +146,7 @@ class AiChat {
     let lastError;
     const models = this.config.geminiModels || [this.config.geminiModel];
     for (const [index, model] of models.entries()) {
+      onModelAttempt?.(model);
       try {
         response = await this.getClient(apiKey).models.generateContent({
           model,

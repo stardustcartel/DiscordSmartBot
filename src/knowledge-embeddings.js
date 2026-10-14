@@ -18,7 +18,7 @@ async function embed({ provider, apiKey, texts, query = false }) {
     }),
     signal: AbortSignal.timeout(12000),
   });
-  if (!response.ok) throw new Error(`Semantic search unavailable (HTTP ${response.status}); keyword search remains available.`);
+  if (!response.ok) throw Object.assign(new Error(`Semantic search unavailable (HTTP ${response.status}); keyword search remains available.`), { status: response.status });
   const result = await response.json();
   const vectors = openai ? result.data?.sort((a, b) => a.index - b.index).map((v) => v.embedding) : result.embeddings?.map((v) => v.values);
   if (vectors?.length !== texts.length) throw new Error("Incomplete embedding response");

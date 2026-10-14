@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const { readJson } = require("./storage");
+const { KnowledgeGroups } = require("./knowledge-groups");
 
 const stopWords = new Set("the and this that what when where which who how are was were have has had can could would should will with from about please help tell does did for you your our their there they into also some any its not but an my or it to is as of in on at be am me do im ive".split(" "));
 const terms = (text) => [...new Set(String(text).toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])].filter((t) => !stopWords.has(t)).slice(0, 40);
@@ -40,6 +41,7 @@ class KnowledgeBase {
         this.checkpoint("migration-v1", true);
       });
     }
+    this.groups = new KnowledgeGroups(this);
   }
 
   transaction(work) {
@@ -72,16 +74,27 @@ class KnowledgeBase {
   }
   upsert(message) {
     if (message.partial) return false;
-    if (!this.shouldIndex(message) || !message.content?.trim()) return this.remove(message);
+    if (!this.shouldIndex(message) || !message.content?.trim()) {
+      const removed = this.remove(message);
+      const roots = this.guildSettings.get(message.guildId).knowledgeChannelIds;
+      if (message.channel?.type !== 12 && (roots.includes(message.channelId) || roots.includes(message.channel?.parentId))) this.groups.boundary(message);
+      return removed;
+    }
     this.store({ id: message.id, guildId: message.guildId, channelId: message.channelId,
       rootId: message.channel?.isThread?.() ? message.channel.parentId : message.channelId,
       channelName: message.channel?.name, authorId: message.author?.id, content: message.content.trim(),
       createdTimestamp: message.createdTimestamp, editedTimestamp: message.editedTimestamp, pinned: message.pinned, replyToId: message.reference?.messageId || null });
     return true;
   }
-  remove(message) { return Boolean(message?.id && this.db.prepare("DELETE FROM messages WHERE id=?").run(message.id).changes); }
+  remove(message) {
+    if (!message?.id) return false;
+    const removed = this.db.prepare("DELETE FROM messages WHERE id=?").run(message.id).changes;
+    this.db.prepare("DELETE FROM knowledge_sequence WHERE id=?").run(message.id);
+    return Boolean(removed);
+  }
   removeChannel(id) {
     this.db.prepare("DELETE FROM messages WHERE channelId=? OR rootId=?").run(id, id);
+    this.db.prepare("DELETE FROM knowledge_sequence WHERE channelId=? OR rootId=?").run(id, id);
     this.db.prepare("DELETE FROM checkpoints WHERE key=?").run(`channel:${id}`);
     for (const row of this.db.prepare("SELECT key,value FROM checkpoints WHERE key LIKE 'channel:%' OR key LIKE 'archive:%'").all()) {
       if (JSON.parse(row.value).rootId === id) this.db.prepare("DELETE FROM checkpoints WHERE key=?").run(row.key);
@@ -90,6 +103,8 @@ class KnowledgeBase {
   prune(guildId) {
     const ids = this.guildSettings.get(guildId).knowledgeChannelIds;
     this.db.prepare("DELETE FROM messages WHERE guildId=? AND rootId NOT IN (SELECT value FROM json_each(?))").run(guildId, JSON.stringify(ids));
+    this.db.prepare("DELETE FROM knowledge_sequence WHERE guildId=? AND rootId NOT IN (SELECT value FROM json_each(?))").run(guildId, JSON.stringify(ids));
+    this.groups.flush(guildId);
     for (const row of this.db.prepare("SELECT key,value FROM checkpoints WHERE key LIKE 'channel:%' OR key LIKE 'archive:%'").all()) {
       const value = JSON.parse(row.value);
       if (value.guildId === guildId && !ids.includes(value.rootId)) this.db.prepare("DELETE FROM checkpoints WHERE key=?").run(row.key);

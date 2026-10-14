@@ -109,27 +109,34 @@ class KnowledgeIndexer {
           const model = modelFor(credentials.provider);
           if (credentials.apiKey && Date.now() >= (this.cooldowns.get(guild.id) || 0)) {
             const readableRoots = roots.filter((id) => canRead(guild.channels.cache.get(id), guild.members.me));
-            const candidates = this.store.pendingVectors(guild.id, model, 32, readableRoots);
+            const candidates = this.store.groups.pending(guild.id, model, 32, readableRoots);
             const batch = [];
+            let checkedMessages = 0;
             for (const saved of candidates) {
+              if (checkedMessages + saved.members.length > 64) break;
+              checkedMessages += saved.members.length;
               try {
                 const channel = await guild.channels.fetch(saved.channelId, { force: true });
                 if (!canRead(channel, guild.members.me)) continue;
-                const message = await channel.messages.fetch({ message: saved.id, cache: false, force: true });
-                this.store.upsert(message);
-                if (this.store.shouldIndex(message) && message.content?.trim()) batch.push({ ...saved, content: message.content.trim(), channelName: channel.name });
+                for (const member of saved.members) {
+                  try { this.store.upsert(await channel.messages.fetch({ message: member.id, cache: false, force: true })); }
+                  catch (error) { if ([10003, 10008].includes(Number(error.code))) this.store.remove(member); else throw error; }
+                }
+                const current = this.store.groups.forMessage(saved);
+                if (current && current.fingerprint === saved.fingerprint && this.settings.get(guild.id).knowledgeChannelIds.includes(current.rootId)) batch.push(current);
               } catch (error) { if ([10003, 10008].includes(Number(error.code))) this.store.remove(saved); }
             }
             if (batch.length) {
               try {
                 const vectors = await embed({ ...credentials, texts: batch.map((m) => m.channelName + "\n" + m.content) });
-                batch.forEach((m, i) => this.store.putVector(m, model, vectors[i]));
+                batch.forEach((m, i) => this.store.groups.putVector(m, model, vectors[i]));
               } catch (error) { this.cooldowns.set(guild.id, Date.now() + 300000); status.warnings.push(error.message); }
             }
           } else if (!credentials.apiKey) status.warnings.push("Add a key for the selected AI provider to enable semantic search.");
           else status.warnings.push("Semantic indexing is cooling down after an API error; keyword search is available.");
           status.indexed = this.store.count(guild.id);
-          status.embedded = this.store.db.prepare("SELECT count(*) AS n FROM messages WHERE guildId=? AND vectorModel=?").get(guild.id, model).n;
+          this.store.groups.flush(guild.id);
+          status.embedded = this.store.groups.embedded(guild.id, model);
           status.pendingChannels = channels.filter((c) => { const saved = this.store.checkpoint(`channel:${c.id}`); return saved && (!saved.complete || saved.caughtUp === false); }).length;
           const archivePending = roots.some((id) => !this.store.checkpoint(`archive:${id}`)?.complete);
           status.state = status.pendingChannels || archivePending || status.embedded < status.indexed ? "indexing" : status.warnings.length ? "partial" : "ready";
