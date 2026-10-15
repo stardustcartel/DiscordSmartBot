@@ -2,7 +2,7 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
-  { version: "2.1.1", at: "2026-10-15T21:08:07Z", historical: false, changes: [
+  { version: "2.1.1", at: "2026-10-15T21:09:03Z", historical: false, changes: [
     "Patreon connection failures now identify whether the app credentials, authorization, campaign lookup, or dashboard storage needs attention."
   ] },
   { version: "2.1.0", at: "2026-10-14T23:45:29Z", historical: false, changes: [
