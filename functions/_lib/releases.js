@@ -2,7 +2,7 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
-  { version: "2.1.4", at: null, historical: false, changes: [
+  { version: "2.1.4", at: "2026-10-15T23:38:43Z", historical: false, changes: [
     "Shortened and clarified dashboard guidance for Knowledge Base, Patreon, and Behavior settings."
   ] },
   { version: "2.1.3", at: "2026-10-15T21:43:05Z", historical: false, changes: [
