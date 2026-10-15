@@ -112,7 +112,6 @@ async function loadKnowledge(reset = false) {
   $("#knowledge-status-details").textContent = (status ? `${Number(status.indexed || 0).toLocaleString()} messages cataloged · ${Number(status.embedded || 0).toLocaleString()} ready for semantic search · ${Number(status.pendingChannels || 0)} channels or posts still backfilling` : "Choose your source channels, then save to start cataloging their messages and forum posts.") + (stale || pending || status?.state === "indexing" || status?.state === "retrying" ? " The bot reports about every 30 seconds; this page checks for updates every 15 seconds." : "");
   $("#knowledge-status-time").textContent = status?.updatedAt ? `Last checked: ${new Date(status.updatedAt).toLocaleString()}` : "";
   $("#knowledge-warnings").replaceChildren(...(status?.warnings || []).map((text) => { const p = document.createElement("p"); p.textContent = text; return p; }));
-  if (typeof loadPatreon === "function") loadPatreon().catch(error => { $("#patreon-status-title").textContent = error.message; });
 }
 function setupKnowledge() {
   for (const [id, key] of [["#knowledge-only", "knowledgeOnly"], ["#knowledge-citations", "requireCitations"]]) $(id).onchange = (event) => {

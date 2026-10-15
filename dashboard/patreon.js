@@ -1,4 +1,4 @@
-let patreonGuild = '', patreonSaved = [], patreonSelected = new Set(), patreonDirty = false, patreonBusy = false, patreonLoadId = 0;
+let patreonGuild = '', patreonSaved = [], patreonSelected = new Set(), patreonChannels = [], patreonDirty = false, patreonBusy = false, patreonLoadId = 0;
 function closePatreonMenu() {
   $('#patreon-channel-options').hidden = true;
   $('#patreon-channel-trigger').setAttribute('aria-expanded', 'false');
@@ -8,7 +8,7 @@ function renderPatreonChannels() {
   const list = $('#patreon-channel-options');
   const focused = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   $('#patreon-channel-label').textContent = patreonSelected.size ? `${patreonSelected.size} channels selected` : 'All bot response channels';
-  const choices = [...knowledgeChannels];
+  const choices = [...patreonChannels];
   for (const id of patreonSelected) if (!choices.some(c => c.id === id)) choices.push({ id, name: 'Unavailable channel' });
   list.replaceChildren(...choices.map(channel => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'select-option multi-select-option'; button.dataset.id = channel.id; button.setAttribute('role', 'option'); button.setAttribute('aria-selected', String(patreonSelected.has(channel.id)));
@@ -25,9 +25,13 @@ async function loadPatreon() {
   const guildId = selected;
   if (!guildId) return;
   const loadId = ++patreonLoadId;
-  const data = await api(`/api/guild/${guildId}/patreon`);
+  const [data, sourceChannels] = await Promise.all([
+    api(`/api/guild/${guildId}/patreon`),
+    api(`/api/guild/${guildId}/knowledge`).then(result => result.channels).catch(() => []),
+  ]);
   if (guildId !== selected || loadId !== patreonLoadId) return;
   if (patreonGuild !== guildId) { patreonDirty = false; closePatreonMenu(); }
+  patreonChannels = sourceChannels;
   patreonGuild = guildId; patreonSaved = data.channelIds || [];
   if (!patreonDirty) patreonSelected = new Set(patreonSaved);
   $('#patreon-connect').hidden = data.connected;
@@ -75,4 +79,5 @@ function setupPatreon() {
       buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length-1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
     }
   });
+  setInterval(() => { if (!document.hidden && $('#patreon').classList.contains('active') && !$('#workspace').hidden) loadPatreon().catch(() => {}); }, 15000);
 }

@@ -284,6 +284,9 @@ function showWorkspace(tab = "overview") {
   $("#server-screen").hidden = true; $("#workspace").hidden = false;
   $("#personality-tab").hidden = true;
   $("#knowledge-tab").hidden = true;
+  $("#knowledge-tab").setAttribute("aria-expanded", "false");
+  $("#knowledge-discord-tab").hidden = true;
+  $("#knowledge-patreon-tab").hidden = true;
   setHelpExpanded(false);
   knowledgeDirty = false;
   knowledgePolicyDirty = false;
@@ -297,20 +300,27 @@ function showWorkspace(tab = "overview") {
 }
 function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add an AI key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
 function showTab(tab) {
-  const aiSection = ["gemini", "personality", "knowledge"].includes(tab);
+  const aiSection = ["gemini", "personality", "knowledge", "patreon"].includes(tab);
+  const knowledgeSection = tab === "knowledge" || tab === "patreon";
   $("#personality-tab").hidden = !aiSection;
   $("#knowledge-tab").hidden = !aiSection;
+  $("#knowledge-tab").setAttribute("aria-expanded", String(knowledgeSection));
+  $("#knowledge-discord-tab").hidden = !knowledgeSection;
+  $("#knowledge-patreon-tab").hidden = !knowledgeSection;
   const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`);
   if (button?.disabled) return toast("Connect a valid AI key to unlock Behavior.");
   setHelpExpanded(["support", "version-history"].includes(tab));
   document.querySelectorAll(".tab,.subtab,.panel").forEach((element) => element.classList.remove("active"));
   button?.classList.add("active");
+  $("#knowledge-tab").classList.toggle("active", knowledgeSection);
   $("#gemini-tab")?.classList.toggle("expanded", aiSection);
   $(`#${tab}`)?.classList.add("active");
   if (tab === "permissions") loadPermissions().catch((error) => toast(error.message));
   if (tab === "version-history") loadVersionHistory();
   if (tab === "knowledge") loadKnowledge().catch((error) => toast(error.message));
   else closeKnowledgeMenu();
+  if (tab === "patreon") loadPatreon().catch((error) => toast(error.message));
+  else closePatreonMenu();
   requestAnimationFrame(updateMobileNavHint);
 }
 function renderServers(guilds) {
@@ -346,7 +356,7 @@ async function load() {
     const returned = new URLSearchParams(location.search);
     if (returned.has("patreon")) {
       const guild = me.guilds.find(item => item.id === returned.get("guild"));
-      if (guild) { await selectGuild(guild.id, guild); showTab("knowledge"); }
+      if (guild) { await selectGuild(guild.id, guild); showTab("patreon"); }
       const outcome = returned.get("patreon");
       const patreonMessages = {
         connected: "Patreon connected. Your posts will begin importing shortly.",
@@ -537,7 +547,15 @@ $("#login").onclick = () => dashboardReady ? (location = "/auth/login") : toast(
 $("#logout").onclick = () => { location = "/auth/logout"; };
 $("#back").onclick = () => { $("#workspace").hidden = true; $("#server-screen").hidden = false; };
 $("#invite").onclick = (event) => { event.currentTarget.href = inviteUrl; };
-document.querySelectorAll(".tab,.subtab").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
+document.querySelectorAll(".tab[data-tab],.subtab[data-tab]").forEach((button) => { button.onclick = () => showTab(button.dataset.tab); });
+$("#knowledge-tab").onclick = () => {
+  if ($("#knowledge-tab").getAttribute("aria-expanded") === "true") {
+    $("#knowledge-tab").setAttribute("aria-expanded", "false");
+    $("#knowledge-discord-tab").hidden = true;
+    $("#knowledge-patreon-tab").hidden = true;
+    requestAnimationFrame(updateMobileNavHint);
+  } else showTab($("#patreon").classList.contains("active") ? "patreon" : "knowledge");
+};
 $("#help-tab").onclick = () => setHelpExpanded($("#help-tab").getAttribute("aria-expanded") !== "true");
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = (event) => { if (button.tagName === "A") event.preventDefault(); showTab(button.dataset.open); }; });
 $("#personality-form").onsubmit = async (event) => { event.preventDefault(); const value = event.target.personality.value; try { await api(`/api/guild/${selected}/personality`, { method: "PUT", body: JSON.stringify({ personality: value }) }); settings.personality = value; updateSaveButtons(); toast("Personality saved."); } catch (error) { toast(error.message || "Could not save personality."); } };

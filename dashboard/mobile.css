@@ -89,6 +89,14 @@
     flex: 0 1 auto;
   }
 
+  .sidebar nav .knowledge-source-subtab {
+    margin: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    background: #242039;
+    color: #d8d1f4;
+  }
+
   #youtube-form > button,
   #gemini-form > button,
   #openai-form > button,
