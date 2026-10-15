@@ -55,7 +55,7 @@ export async function onRequestGet({ env, request }) {
     if (stage === 'session') outcome = 'session-expired';
     else if (stage === 'oauth-request') outcome = error?.code === 'expired_request' ? 'session-expired' : 'save-failed';
     else if (stage === 'token-exchange') outcome = error?.code === 'invalid_client' ? 'client-rejected' : error?.code === 'invalid_grant' ? 'grant-rejected' : [400, 401, 403].includes(error?.status) ? 'token-rejected' : 'token-unavailable';
-    else if (stage === 'campaign-lookup') outcome = 'campaign-lookup-failed';
+    else if (stage === 'campaign-lookup') outcome = error?.status === 400 ? 'campaign-request-invalid' : [401, 403].includes(error?.status) ? 'campaign-access-denied' : error?.status === 429 ? 'campaign-rate-limited' : 'campaign-lookup-failed';
     else if (stage === 'connection-save') outcome = 'save-failed';
     else outcome = 'failed';
   }

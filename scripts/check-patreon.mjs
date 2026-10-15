@@ -35,7 +35,7 @@ globalThis.fetch = async (input, options = {}) => {
     return new Response('', { status: 404 });
   }
   if (url.pathname.endsWith('/token')) { tokenCalls++; return tokenError ? Response.json({ error: tokenError, error_description: 'Do not expose this provider description.' }, { status: 401 }) : Response.json({ access_token: 'access-fixture', refresh_token: 'refresh-fixture', expires_in: 3600 }); }
-  if (url.pathname.endsWith('/campaigns')) return campaignError ? Response.json({ error: 'forbidden' }, { status: campaignError }) : Response.json({ data: [{ id: '99', attributes: { creation_name: 'Test creator' } }] });
+  if (url.pathname.endsWith('/campaigns')) { if (url.search) assert.ok(url.search.includes('fields%5Bcampaign%5D='), 'Patreon field selectors must be encoded'); return campaignError ? Response.json({ error: 'forbidden' }, { status: campaignError }) : Response.json({ data: [{ id: '99', attributes: { creation_name: 'Test creator' } }] }); }
   if (url.pathname.endsWith('/webhooks')) return Response.json({ data: { id: 'hook1', attributes: { secret: 'webhook-fixture' } } });
   if (url.pathname.endsWith('/webhooks/hook1')) return new Response(null, { status: 204 });
   if (url.pathname.endsWith('/campaigns/99/posts')) return Response.json({ data: malformed ? [{ id: 'oops' }] : postList, meta: { pagination: { cursors: { next: nextCursor } } } });
@@ -131,12 +131,15 @@ try {
       const attemptState = new URL((await attempt.json()).url).searchParams.get('state');
       assert.ok((await runCallback(attemptState, attemptState)).headers.get('Location').includes(`patreon=${expected}`));
     }
-    tokenError = null; campaignError = 403;
-    const attempt = await runAction({ action: 'connect' });
-    const attemptState = new URL((await attempt.json()).url).searchParams.get('state');
-    assert.ok((await runCallback(attemptState, attemptState)).headers.get('Location').includes('patreon=campaign-lookup-failed'));
+    tokenError = null;
+    for (const [status, expected] of [[400, 'campaign-request-invalid'], [403, 'campaign-access-denied'], [429, 'campaign-rate-limited']]) {
+      campaignError = status;
+      const attempt = await runAction({ action: 'connect' });
+      const attemptState = new URL((await attempt.json()).url).searchParams.get('state');
+      assert.ok((await runCallback(attemptState, attemptState)).headers.get('Location').includes(`patreon=${expected}`));
+    }
     assert.equal(await connection(env, guildId), null);
-    assert.equal(failures.length, 3);
+    assert.equal(failures.length, 5);
     assert.ok(!JSON.stringify(failures).includes('Do not expose this provider description.'), 'Provider response details must not enter logs');
   } finally { tokenError = null; campaignError = null; console.error = originalError; }
   const audit = sqlite.prepare("SELECT snapshot_json FROM guild_settings_audit WHERE action='patreon_disconnected'").get();

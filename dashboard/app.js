@@ -359,6 +359,9 @@ async function load() {
         "grant-rejected": "Patreon rejected the authorization code. Check the registered redirect URL, then try Connect Patreon again.",
         "token-rejected": "Patreon rejected the connection. Check your Patreon Client Secret in Cloudflare Production and the registered redirect URL, then redeploy and try again.",
         "token-unavailable": "Patreon's authorization service could not be reached. Try connecting again shortly.",
+        "campaign-request-invalid": "Patreon rejected the campaign lookup request. The dashboard owner needs to check the Patreon integration.",
+        "campaign-access-denied": "Patreon did not grant access to a creator campaign. Connect with the Patreon account that owns the page you want indexed.",
+        "campaign-rate-limited": "Patreon is temporarily limiting campaign requests. Please try connecting again later.",
         "campaign-lookup-failed": "Patreon authorized your account, but campaign details could not be read. Check that this account owns the campaign and try again.",
         "save-failed": "Patreon authorized your account, but the dashboard could not save the connection. Please contact support."
       };

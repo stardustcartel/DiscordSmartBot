@@ -36,7 +36,9 @@ export async function exchange(env, values) {
 }
 export async function apiToken(token, path, options = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Invalid Patreon endpoint.');
-  const response = await fetch('https://www.patreon.com/api/oauth2/v2' + path, { ...options, headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'TheSmartBot - Knowledge Sync', 'Content-Type': 'application/json', ...options.headers }, signal: AbortSignal.timeout(15000), redirect: 'error' });
+  const endpoint = new URL('https://www.patreon.com/api/oauth2/v2' + path);
+  endpoint.search = endpoint.searchParams.toString();
+  const response = await fetch(endpoint, { ...options, headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'TheSmartBot - Knowledge Sync', 'Content-Type': 'application/json', ...options.headers }, signal: AbortSignal.timeout(15000), redirect: 'error' });
   if (response.status === 404) return null;
   if (!response.ok) throw failure(response.status);
   return response.status === 204 ? {} : response.json();
