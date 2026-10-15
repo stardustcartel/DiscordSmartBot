@@ -20,7 +20,7 @@ async function loadVersionHistory() {
       const header = document.createElement("div"); header.className = "release-heading";
       const version = document.createElement("strong"); version.textContent = `v${item.version}`;
       const date = document.createElement("time"); date.dateTime = item.at;
-      date.textContent = `${item.historical ? "Recorded" : "Released"} ${new Date(item.at).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`;
+      date.textContent = item.at ? `${item.historical ? "Recorded" : "Released"} ${new Date(item.at).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}` : "Deployment in progress";
       header.append(version, date);
       if (data.canDelete) {
         const remove = document.createElement("button"); remove.type = "button"; remove.className = "release-remove"; remove.textContent = "−"; remove.setAttribute("aria-label", `Delete v${item.version} from version history`);

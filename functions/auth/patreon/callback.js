@@ -51,7 +51,7 @@ export async function onRequestGet({ env, request }) {
   } catch (error) {
     // Record only the failing stage and HTTP status. Provider responses, tokens,
     // authorization codes, and cookie contents must never enter logs or redirects.
-    if (stage !== 'session' && error?.code !== 'expired_request') console.error('Patreon connection failed', { stage, status: Number.isInteger(error?.status) ? error.status : null, code: ['invalid_client', 'invalid_grant', 'invalid_request'].includes(error?.code) ? error.code : null });
+    if (stage !== 'session' && error?.code !== 'expired_request') console.error('Patreon connection failed', { stage, status: Number.isInteger(error?.status) ? error.status : null, code: ['invalid_client', 'invalid_grant', 'invalid_request'].includes(error?.code) ? error.code : null, reason: ['timeout', 'network', 'unsafe-redirect', 'redirect', 'invalid-json'].includes(error?.reason) ? error.reason : null, errorType: ['TypeError', 'SyntaxError', 'Error', 'TimeoutError'].includes(error?.name) ? error.name : null });
     if (stage === 'session') outcome = 'session-expired';
     else if (stage === 'oauth-request') outcome = error?.code === 'expired_request' ? 'session-expired' : 'save-failed';
     else if (stage === 'token-exchange') outcome = error?.code === 'invalid_client' ? 'client-rejected' : error?.code === 'invalid_grant' ? 'grant-rejected' : [400, 401, 403].includes(error?.status) ? 'token-rejected' : 'token-unavailable';

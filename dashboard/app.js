@@ -362,7 +362,7 @@ async function load() {
         "campaign-request-invalid": "Patreon rejected the campaign lookup request. The dashboard owner needs to check the Patreon integration.",
         "campaign-access-denied": "Patreon did not grant access to a creator campaign. Connect with the Patreon account that owns the page you want indexed.",
         "campaign-rate-limited": "Patreon is temporarily limiting campaign requests. Please try connecting again later.",
-        "campaign-lookup-failed": "Patreon authorized your account, but campaign details could not be read. Check that this account owns the campaign and try again.",
+        "campaign-lookup-failed": "Patreon authorized your account, but the dashboard could not read campaign details. The integration needs troubleshooting; your creator page may be fine.",
         "save-failed": "Patreon authorized your account, but the dashboard could not save the connection. Please contact support."
       };
       toast(patreonMessages[outcome] || "Patreon could not be connected. Please try again.");

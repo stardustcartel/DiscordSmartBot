@@ -38,10 +38,25 @@ export async function apiToken(token, path, options = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Invalid Patreon endpoint.');
   const endpoint = new URL('https://www.patreon.com/api/oauth2/v2' + path);
   endpoint.search = endpoint.searchParams.toString();
-  const response = await fetch(endpoint, { ...options, headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'TheSmartBot - Knowledge Sync', 'Content-Type': 'application/json', ...options.headers }, signal: AbortSignal.timeout(15000), redirect: 'error' });
+  const requestOptions = { ...options, headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'TheSmartBot - Knowledge Sync', 'Accept': 'application/json', 'Content-Type': 'application/json', ...options.headers }, signal: AbortSignal.timeout(15000), redirect: 'manual' };
+  let response;
+  try { response = await fetch(endpoint.href, requestOptions); }
+  catch (error) { throw Object.assign(new Error('Patreon request failed before an HTTP response.'), { reason: error?.name === 'TimeoutError' ? 'timeout' : 'network' }); }
+  // Patreon may canonicalize an API URL. Follow only an API path on the same
+  // origin; never forward a bearer token to a login page or another host.
+  if ([301, 302, 307, 308].includes(response.status)) {
+    const location = response.headers.get('Location');
+    const target = location ? new URL(location, endpoint) : null;
+    if (!target || target.origin !== endpoint.origin || !target.pathname.startsWith('/api/oauth2/v2/')) throw Object.assign(failure(response.status), { reason: 'unsafe-redirect' });
+    try { response = await fetch(target.href, requestOptions); }
+    catch (error) { throw Object.assign(new Error('Patreon redirect failed before an HTTP response.'), { reason: error?.name === 'TimeoutError' ? 'timeout' : 'network' }); }
+  }
+  if (response.status >= 300 && response.status < 400) throw Object.assign(failure(response.status), { reason: 'redirect' });
   if (response.status === 404) return null;
   if (!response.ok) throw failure(response.status);
-  return response.status === 204 ? {} : response.json();
+  if (response.status === 204) return {};
+  try { return await response.json(); }
+  catch { throw Object.assign(failure(response.status), { reason: 'invalid-json' }); }
 }
 export async function accessToken(env, row) {
   let token = JSON.parse(await decryptGuildKey(JSON.parse(row.token_json), env.GUILD_SECRETS_KEY));
