@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.1.1", at: "2026-10-15T21:08:07Z", historical: false, changes: [
+    "Patreon connection failures now identify whether the app credentials, authorization, campaign lookup, or dashboard storage needs attention."
+  ] },
   { version: "2.1.0", at: "2026-10-14T23:45:29Z", historical: false, changes: [
     "Added Connect Patreon in Knowledge Base, with OAuth authorization, separate Discord and Patreon indexing status, and channel visibility controls.",
     "Connected creator post text and resource links can support bot answers and citations. Post notifications and periodic synchronization keep the archive updated; collections do not need to be recreated.",

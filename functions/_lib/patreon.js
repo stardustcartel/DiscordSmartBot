@@ -22,7 +22,14 @@ export function failure(status) {
 }
 export async function exchange(env, values) {
   const response = await fetch('https://www.patreon.com/api/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'TheSmartBot - Knowledge Sync' }, body: new URLSearchParams({ client_id: env.PATREON_CLIENT_ID, client_secret: env.PATREON_CLIENT_SECRET, ...values }), signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw failure(response.status);
+  if (!response.ok) {
+    let code = null;
+    try {
+      const providerError = (await response.json()).error;
+      if (['invalid_client', 'invalid_grant', 'invalid_request'].includes(providerError)) code = providerError;
+    } catch { /* Ignore provider response bodies that are not JSON. */ }
+    throw Object.assign(failure(response.status), { code });
+  }
   const token = await response.json();
   if (!token.access_token || !token.refresh_token) throw failure(401);
   return token;

@@ -23,7 +23,7 @@ const request = (path, body, extra = {}) => new Request('https://example.test'+p
 const runAction = body => action({ env, params: { guildId }, request: request('/api/guild/test/patreon', body) });
 const runInternal = async (body, id = guildId) => internal({ env, params: { guildId: id }, request: request('/api/internal/patreon/test', body, { Authorization: 'Bearer sync-test' }) });
 const post = { type: 'post', id: '1234', relationships: { campaign: { data: { id: '99', type: 'campaign' } } }, attributes: { title: 'Creator sound library', content: '<p>Download the sound effects from <a href="https://example.test/library">the library</a>.</p>', url: 'https://www.patreon.com/posts/1234', published_at: '2026-01-01T12:00:00Z', is_public: false, tiers: ['elite'] } };
-let currentPost = structuredClone(post), postList = [post], nextCursor = null, malformed = false, tokenCalls = 0;
+let currentPost = structuredClone(post), postList = [post], nextCursor = null, malformed = false, tokenCalls = 0, tokenError = null, campaignError = null;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, options = {}) => {
   const url = new URL(String(input));
@@ -34,8 +34,8 @@ globalThis.fetch = async (input, options = {}) => {
     if (url.pathname.endsWith('/channels')) return Response.json([{ id: channelId, type: 0 }, { id: forumId, type: 15 }]);
     return new Response('', { status: 404 });
   }
-  if (url.pathname.endsWith('/token')) { tokenCalls++; return Response.json({ access_token: 'access-fixture', refresh_token: 'refresh-fixture', expires_in: 3600 }); }
-  if (url.pathname.endsWith('/campaigns')) return Response.json({ data: [{ id: '99', attributes: { creation_name: 'Test creator' } }] });
+  if (url.pathname.endsWith('/token')) { tokenCalls++; return tokenError ? Response.json({ error: tokenError, error_description: 'Do not expose this provider description.' }, { status: 401 }) : Response.json({ access_token: 'access-fixture', refresh_token: 'refresh-fixture', expires_in: 3600 }); }
+  if (url.pathname.endsWith('/campaigns')) return campaignError ? Response.json({ error: 'forbidden' }, { status: campaignError }) : Response.json({ data: [{ id: '99', attributes: { creation_name: 'Test creator' } }] });
   if (url.pathname.endsWith('/webhooks')) return Response.json({ data: { id: 'hook1', attributes: { secret: 'webhook-fixture' } } });
   if (url.pathname.endsWith('/webhooks/hook1')) return new Response(null, { status: 204 });
   if (url.pathname.endsWith('/campaigns/99/posts')) return Response.json({ data: malformed ? [{ id: 'oops' }] : postList, meta: { pagination: { cursors: { next: nextCursor } } } });
@@ -56,13 +56,13 @@ try {
   assert.equal(oauthUrl.searchParams.get('redirect_uri'), 'https://example.test/auth/patreon/callback');
   assert.ok(oauthUrl.searchParams.get('scope').includes('campaigns.posts'));
   const runCallback = (state = signed, cookie = signed, code = 'code') => callback({ env, request: request(`/auth/patreon/callback?state=${encodeURIComponent(state)}&code=${code}`, undefined, { Cookie: `dashboard_session=${session}; patreon_oauth_state=${cookie}` }) });
-  assert.ok((await runCallback(signed, 'wrong')).headers.get('Location').includes('patreon=failed'));
+  assert.ok((await runCallback(signed, 'wrong')).headers.get('Location').includes('patreon=session-expired'));
   assert.equal(tokenCalls, 0);
   assert.ok((await runCallback()).headers.get('Location').includes('patreon=connected'));
   const row = await connection(env, guildId);
   assert.ok(row.webhook_id);
   assert.ok(!row.token_json.includes('access-fixture') && !row.webhook_secret.includes('webhook-fixture'));
-  assert.ok((await runCallback()).headers.get('Location').includes('patreon=failed'), 'OAuth state cannot be replayed');
+  assert.ok((await runCallback()).headers.get('Location').includes('patreon=session-expired'), 'OAuth state cannot be replayed');
   assert.equal(tokenCalls, 1);
   const publicStatus = await (await status({ env, params: { guildId }, request: request('/api/guild/test/patreon') })).text();
   assert.ok(!publicStatus.includes('token_json') && !publicStatus.includes('hook_key') && !publicStatus.includes('webhook-fixture'));
@@ -122,6 +122,23 @@ try {
   await worker.tickGuild(guildId);
   assert.equal(worker.stats(guildId, 'none').indexed, 0);
   assert.equal(await connection(env, guildId), null);
+  const originalError = console.error, failures = [];
+  console.error = (...parts) => failures.push(parts);
+  try {
+    for (const [providerCode, expected] of [['invalid_client', 'client-rejected'], ['invalid_grant', 'grant-rejected']]) {
+      tokenError = providerCode;
+      const attempt = await runAction({ action: 'connect' });
+      const attemptState = new URL((await attempt.json()).url).searchParams.get('state');
+      assert.ok((await runCallback(attemptState, attemptState)).headers.get('Location').includes(`patreon=${expected}`));
+    }
+    tokenError = null; campaignError = 403;
+    const attempt = await runAction({ action: 'connect' });
+    const attemptState = new URL((await attempt.json()).url).searchParams.get('state');
+    assert.ok((await runCallback(attemptState, attemptState)).headers.get('Location').includes('patreon=campaign-lookup-failed'));
+    assert.equal(await connection(env, guildId), null);
+    assert.equal(failures.length, 3);
+    assert.ok(!JSON.stringify(failures).includes('Do not expose this provider description.'), 'Provider response details must not enter logs');
+  } finally { tokenError = null; campaignError = null; console.error = originalError; }
   const audit = sqlite.prepare("SELECT snapshot_json FROM guild_settings_audit WHERE action='patreon_disconnected'").get();
   assert.equal(JSON.parse(audit.snapshot_json).patreonConnection.connected, false);
   assert.ok(!audit.snapshot_json.includes('refresh-fixture'));

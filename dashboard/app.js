@@ -348,7 +348,21 @@ async function load() {
       const guild = me.guilds.find(item => item.id === returned.get("guild"));
       if (guild) { await selectGuild(guild.id, guild); showTab("knowledge"); }
       const outcome = returned.get("patreon");
-      toast(outcome === "connected" ? "Patreon connected. Your posts will begin importing shortly." : outcome === "cancelled" ? "Patreon connection cancelled." : outcome === "no-campaign" ? "Sign in with the Patreon creator account to connect its posts." : outcome === "already-connected" ? "Disconnect the current Patreon before linking a different creator." : outcome === "multiple-campaigns" ? "This account has multiple campaigns. Contact support to select the correct campaign." : "Patreon could not be connected. Please try again.");
+      const patreonMessages = {
+        connected: "Patreon connected. Your posts will begin importing shortly.",
+        cancelled: "Patreon connection cancelled.",
+        "no-campaign": "Sign in with the Patreon creator account to connect its posts.",
+        "already-connected": "Disconnect the current Patreon before linking a different creator.",
+        "multiple-campaigns": "This account has multiple campaigns. Contact support to select the correct campaign.",
+        "session-expired": "The connection session expired. Sign in to the dashboard and try Connect Patreon again.",
+        "client-rejected": "Patreon rejected this app's Client ID or Client Secret. Check both Cloudflare Production values against your Patreon API v2 client, then redeploy.",
+        "grant-rejected": "Patreon rejected the authorization code. Check the registered redirect URL, then try Connect Patreon again.",
+        "token-rejected": "Patreon rejected the connection. Check your Patreon Client Secret in Cloudflare Production and the registered redirect URL, then redeploy and try again.",
+        "token-unavailable": "Patreon's authorization service could not be reached. Try connecting again shortly.",
+        "campaign-lookup-failed": "Patreon authorized your account, but campaign details could not be read. Check that this account owns the campaign and try again.",
+        "save-failed": "Patreon authorized your account, but the dashboard could not save the connection. Please contact support."
+      };
+      toast(patreonMessages[outcome] || "Patreon could not be connected. Please try again.");
       history.replaceState(null, "", location.pathname);
     }
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
