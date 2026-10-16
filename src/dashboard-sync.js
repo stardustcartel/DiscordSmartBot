@@ -63,13 +63,17 @@ class DashboardSync {
     const guild = client.guilds.cache.get(remote.guildId);
     if (guild) {
       const addedKnowledgeChannels = settings.knowledgeChannelIds.filter((id) => !current.knowledgeChannelIds.includes(id));
-      if (addedKnowledgeChannels.length) Promise.allSettled(addedKnowledgeChannels.map(async (id) => {
-        const channel = await guild.channels.fetch(id);
-        if (channel?.messages) await this.knowledgeIndexer.scan(channel, true);
-      })).then((results) => {
-        const failed = results.filter((result) => result.status === "rejected").length;
+      if (addedKnowledgeChannels.length) (async () => {
+        let failed = 0;
+        for (let i = 0; i < addedKnowledgeChannels.length; i += 4) {
+          const results = await Promise.allSettled(addedKnowledgeChannels.slice(i, i + 4).map(async (id) => {
+            const channel = await guild.channels.fetch(id);
+            if (channel?.messages) await this.knowledgeIndexer.scan(channel, true);
+          }));
+          failed += results.filter((result) => result.status === "rejected").length;
+        }
         if (failed) console.warn(`Could not promptly scan ${failed} newly selected knowledge channel(s) in ${remote.guildId}; background indexing will retry.`);
-      });
+      })().catch((error) => console.warn(`Could not promptly scan newly selected knowledge channels in ${remote.guildId}:`, error.message));
       const body = { nick: settings.profile.nickname || null, bio: settings.profile.bio || "" };
       if (settings.profile.avatarPath && fs.existsSync(settings.profile.avatarPath)) body.avatar = `data:image/${path.extname(settings.profile.avatarPath).toLowerCase() === ".jpg" ? "jpeg" : path.extname(settings.profile.avatarPath).slice(1)};base64,${fs.readFileSync(settings.profile.avatarPath).toString("base64")}`;
       if (settings.profile.bannerPath && fs.existsSync(settings.profile.bannerPath)) body.banner = `data:image/${path.extname(settings.profile.bannerPath).toLowerCase() === ".jpg" ? "jpeg" : path.extname(settings.profile.bannerPath).slice(1)};base64,${fs.readFileSync(settings.profile.bannerPath).toString("base64")}`;
