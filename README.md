@@ -101,6 +101,10 @@ Help & updates contains Version History and Support. Releases live in `functions
 
 Run `npm run check:behavior` alongside the existing checks before deployment. No existing personality or approved guidance is migrated automatically.
 
+Behavior also includes **Names & Search Associations**: up to 40 per-server entries with a canonical name, aliases, related terms, an optional Discord user ID, and context. These settings are audited and synchronized with the other Behavior settings. Search planning and relevance review receive them as vocabulary hints, and matching identities enable topic searches of that author's permitted messages. They do not replace evidence, grant source access, or become arbitrary response instructions. Existing customer Rules are not migrated automatically.
+
+Conversation retrieval expands relevant matches across authors before AI relevance review, regardless of punctuation or grammar. It follows indexed direct replies (including replies to any member of a grouped message), plus up to four messages before and after the group, stopping at five-minute gaps, twenty-minute spans, or unindexed boundaries. Explicit replies can cross time gaps within the same channel. The reviewer selects necessary context group IDs along with each answer; direct reply parents are also retained. Question/answer packets survive together through live verification and the 48,000-character/64-message budget. If essential context disappears, the dependent packet is omitted. Logs record name associations, author searches, conversation edges, selected context, and omissions. Original messages, authors, and citations stay separate. No re-embedding or whole-archive AI upload is needed. Run `npm run check:conversations` for the synthetic context and alias regressions; these do not spend provider credits.
+
 ## Security and product direction
 
 Server managers can use `/setup api-key` to open a private Discord modal and

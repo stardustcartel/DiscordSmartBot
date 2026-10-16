@@ -18,6 +18,7 @@ export function settingsAuditSnapshot(settings = {}, geminiSecret = null, openai
     personality: settings.personality || "",
     rules: settings.rules || "",
     approvedAnswers: settings.approvedAnswers || [],
+    searchAssociations: settings.searchAssociations || [],
     aiProvider: settings.aiProvider || "gemini",
     openAiModel: settings.openAiModel || "",
     openAiSpeed: settings.openAiSpeed || "auto",

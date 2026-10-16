@@ -5,6 +5,7 @@ const defaultSettings = {
   personality: "You are a helpful, friendly Discord assistant.",
   rules: "",
   approvedAnswers: [],
+  searchAssociations: [],
   aiProvider: "gemini",
   openAiModel: "gpt-6-luna",
   openAiSpeed: "auto",

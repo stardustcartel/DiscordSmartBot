@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.2.0", at: "2026-10-16T21:50:30Z", historical: false, changes: [
+    "Added Names & Search Associations in Behavior for nicknames, Discord identities, and context-specific related search terms.",
+    "Knowledge searches now preserve question-and-answer context across members, including informal questions, pronouns, short replies, and nearby explanations. Linked context stays together through answer verification.",
+    "Search logs now show conversation links, selected context, association-based searches, and why context was omitted."
+  ] },
   { version: "2.1.6", at: "2026-10-16T20:51:34Z", historical: false, changes: [
     "Newly selected Discord knowledge channels are scanned promptly, and the dashboard's message count now reflects the current archive on each bot sync.",
     "The bot and dashboard now explain when a restricted source cannot be used in a forum visible to a broader audience, without revealing private source content."

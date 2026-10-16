@@ -99,12 +99,13 @@ class KnowledgeGroups {
     this.flush(message.guildId,[message.channelId]);
     return this.hydrate(this.db.prepare("SELECT g.* FROM conversation_group_members cm JOIN conversation_groups g ON g.id=cm.groupId WHERE cm.messageId=?").get(message.id));
   }
-  search(query, tokens, guildId, allowedIds, { limit=48,offset=0,matchAll=true,contentOnly=true }={}) {
+  search(query, tokens, guildId, allowedIds, { limit=48,offset=0,matchAll=true,contentOnly=true,authorId=null }={}) {
     if (!tokens.length || !allowedIds.length) return { query,tokens,totalMatches:0,distinctMatches:0,matches:[] };
     this.flush(guildId,allowedIds);
     const expression = `${contentOnly ? "content : " : ""}(${tokens.slice(0,12).map((t) => `"${t}"`).join(matchAll ? " AND " : " OR ")})`;
     const args = [expression,guildId,JSON.stringify(allowedIds),JSON.stringify(this.store.guildSettings.get(guildId).knowledgeChannelIds)];
-    const scope = `FROM conversation_search CROSS JOIN conversation_groups g ON g.rowid=conversation_search.rowid WHERE conversation_search MATCH ? AND g.guildId=? AND g.channelId IN (SELECT value FROM json_each(?)) AND g.rootId IN (SELECT value FROM json_each(?))`;
+    const scope = `FROM conversation_search CROSS JOIN conversation_groups g ON g.rowid=conversation_search.rowid WHERE conversation_search MATCH ? AND g.guildId=? AND g.channelId IN (SELECT value FROM json_each(?)) AND g.rootId IN (SELECT value FROM json_each(?))${authorId ? ' AND g.authorId=?' : ''}`;
+    if (authorId) args.push(authorId);
     const totalMatches = this.db.prepare(`SELECT count(*) AS n ${scope}`).get(...args).n;
     const rows = this.db.prepare(`WITH hits AS MATERIALIZED (SELECT g.id,g.guildId,g.channelId,g.rootId,g.channelName,g.authorId,g.content,g.createdTimestamp,g.lastTimestamp,g.memberIds,g.fingerprint,bm25(conversation_search,1.0,0.08) AS rank ${scope}),
       unique_hits AS (SELECT *,row_number() OVER (PARTITION BY lower(trim(content)),lower(trim(channelName)) ORDER BY rank,id) AS duplicate FROM hits)

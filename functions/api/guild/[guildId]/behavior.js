@@ -2,6 +2,7 @@ import { json } from "../../../_lib/auth.js";
 import { authorizedGuild } from "../../../_lib/authorize.js";
 import { mutateState } from "../../../_lib/db.js";
 import { behaviorLimits, safeResourceUrl, normalizeApprovedAnswers } from "../../../../shared/behavior.mjs";
+import { validAssociations, normalizeAssociations } from "../../../../shared/search-associations.mjs";
 
 export async function onRequestPut({ env, request, params }) {
   const access = await authorizedGuild(env, request, params.guildId);
@@ -10,7 +11,9 @@ export async function onRequestPut({ env, request, params }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "Invalid request." }, 400); }
   const hasRules = Object.hasOwn(body || {}, "rules"), hasAnswers = Object.hasOwn(body || {}, "approvedAnswers");
-  if (hasRules === hasAnswers) return json({ error: "Save one Behavior section at a time." }, 400);
+  const hasAssociations = Object.hasOwn(body || {}, "searchAssociations");
+  if (Number(hasRules) + Number(hasAnswers) + Number(hasAssociations) !== 1) return json({ error: "Save one Behavior section at a time." }, 400);
+  if (hasAssociations && !validAssociations(body.searchAssociations)) return json({ error: "Use up to 40 associations with a name, up to 20 aliases and related terms each, an optional Discord user ID, and up to 500 characters of context. Total size must be under 12,000 characters." }, 400);
   if (hasRules && (typeof body.rules !== "string" || body.rules.length > behaviorLimits.rules)) return json({ error: "Rules must be 12,000 characters or fewer." }, 400);
   if (hasAnswers) {
     if (!Array.isArray(body.approvedAnswers) || body.approvedAnswers.length > behaviorLimits.entries) return json({ error: "You can save up to 40 approved answers." }, 400);
@@ -22,6 +25,7 @@ export async function onRequestPut({ env, request, params }) {
     if (total > behaviorLimits.total) return json({ error: "Approved answers must total 24,000 characters or fewer." }, 400);
   }
   const state = await mutateState(env.DB, params.guildId, (current) => {
+    if (hasAssociations) return { ...current, settings: { ...current.settings, searchAssociations: normalizeAssociations(body.searchAssociations) } };
     if (hasRules) return { ...current, settings: { ...current.settings, rules: body.rules.trim() } };
     const previous = new Map(normalizeApprovedAnswers(current.settings.approvedAnswers).map((item) => [item.id, item]));
     const answers = normalizeApprovedAnswers(body.approvedAnswers).map((item) => {
@@ -30,5 +34,5 @@ export async function onRequestPut({ env, request, params }) {
     });
     return { ...current, settings: { ...current.settings, approvedAnswers: answers } };
   }, access.user.id);
-  return json({ ok: true, ...(hasRules ? { rules: state.settings.rules } : { approvedAnswers: state.settings.approvedAnswers }) }, 200, { "Cache-Control": "no-store" });
+  return json({ ok: true, ...(hasRules ? { rules: state.settings.rules } : hasAssociations ? { searchAssociations: state.settings.searchAssociations } : { approvedAnswers: state.settings.approvedAnswers }) }, 200, { "Cache-Control": "no-store" });
 }

@@ -35,6 +35,13 @@ try {
   sqlite.prepare('UPDATE guild_state SET settings_json=? WHERE guild_id=?').run(JSON.stringify(initial.settings), guildId);
   await createStateIfMissing(DB, otherGuild);
   const save = async body => saveBehavior({ env, params: { guildId }, request: await request(`/api/guild/${guildId}/behavior`, 'PUT', body) });
+  const association = { id:'creator',name:'Example creator',aliases:['EC'],related:['audience'],userId:'100000000000000004',context:'Discussing livestreams' };
+  assert.equal((await save({searchAssociations:[association]})).status,200);
+  assert.deepEqual((await getState(DB,guildId)).settings.searchAssociations,[association]);
+  assert.deepEqual((await getState(DB,otherGuild)).settings.searchAssociations,[]);
+  assert.deepEqual(JSON.parse(sqlite.prepare('SELECT snapshot_json FROM guild_settings_audit ORDER BY id DESC LIMIT 1').get().snapshot_json).searchAssociations,[association]);
+  for (const invalid of [[{...association,userId:'1.001e18'}],[association,association],[{...association,aliases:['x'.repeat(121)]}],Array(41).fill(association)]) assert.equal((await save({searchAssociations:invalid})).status,400);
+  assert.equal((await saveBehavior({env,params:{guildId:otherGuild},request:await request('/api/guild/other/behavior','PUT',{searchAssociations:[association]})})).status,403);
   assert.equal((await save({ rules: 'Always address the user as chief.' })).status, 200);
   const answer = { id: 'asset-library', question: 'Where can I find the creator assets?', answer: 'Use the Patreon Collections tab under Elite benefits.', url: 'https://example.com/library' };
   assert.equal((await save({ approvedAnswers: [answer] })).status, 200);

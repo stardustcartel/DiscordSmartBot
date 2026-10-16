@@ -1,6 +1,7 @@
 let approvedDrafts = [];
 const answerFields = (items) => (items || []).map(({ id, question, answer, url }) => ({ id, question: question.trim(), answer: answer.trim(), url: url || "" }));
 function updateBehaviorSaveButtons() {
+  updateAssociationSaveButton();
   const ready = Boolean(selected && settingsLoadedGuild === selected);
   const rules = document.querySelector("#rules-form");
   if (!rules) return;
@@ -35,11 +36,13 @@ function renderApprovedAnswers() {
   }
 }
 function loadBehaviorFields() {
+  loadAssociations();
   document.querySelector("#rules-form").rules.value = settings.rules || "";
   approvedDrafts = structuredClone(settings.approvedAnswers || []);
   renderApprovedAnswers(); updateBehaviorSaveButtons();
 }
 function setupBehavior() {
+  setupAssociations();
   document.querySelector("#add-approved-answer").onclick = () => {
     if (approvedDrafts.length >= 40) return;
     approvedDrafts.push({ id: crypto.randomUUID(), question: "", answer: "", url: "" });

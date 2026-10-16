@@ -40,6 +40,17 @@ try {
     assert.equal(await page.locator('#personality-form textarea').inputValue(), settings.personality);
     assert.equal(await page.locator('#personality-form button').isDisabled(), true);
     assert.equal(await page.locator('#rules-form button').isDisabled(), true);
+    assert.equal(await page.locator('#associations-form button[type=submit]').isDisabled(),true);
+    await page.locator('#add-association').click();
+    assert.equal(await page.locator('#associations-form button[type=submit]').isDisabled(),true);
+    await page.locator('#association-list input').nth(0).fill('Example creator');
+    await page.locator('#association-list textarea').nth(0).fill('EC, Example');
+    await page.locator('#association-list input').nth(1).fill('not-an-id');
+    assert.equal(await page.locator('#associations-form button[type=submit]').isDisabled(),true);
+    await page.locator('#association-list input').nth(1).fill('100000000000000004');
+    await page.locator('#associations-form button[type=submit]').click();
+    await page.waitForFunction(()=>document.querySelector('#associations-form button[type=submit]').disabled);
+    assert.deepEqual(settings.searchAssociations[0].aliases,['EC','Example']);
     await page.locator('#rules-form textarea').fill('');
     assert.equal(await page.locator('#rules-form button').isEnabled(), true, 'Clearing rules must be possible');
     await page.locator('#rules-form button').click();
