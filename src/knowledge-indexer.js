@@ -16,6 +16,23 @@ class KnowledgeIndexer {
     const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
     return { provider, apiKey: provider === "openai" ? this.secrets.getOpenAiKey(guildId) : this.secrets.getGeminiKey(guildId), model: settings.openAiModel };
   }
+  reportStatuses(guildIds) {
+    const reports = {};
+    for (const guildId of guildIds) {
+      const current = this.statuses[guildId];
+      if (!current) continue;
+      const channelIds = this.settings.get(guildId).knowledgeChannelIds;
+      const indexed = this.store.count(guildId);
+      const embedded = this.store.groups.embedded(guildId, modelFor(this.credentials(guildId).provider));
+      const channelsChanged = JSON.stringify(channelIds) !== JSON.stringify(current.channelIds);
+      const changed = indexed !== current.indexed || embedded !== current.embedded || channelsChanged;
+      reports[guildId] = { ...current, channelIds, indexed, embedded,
+        state: !channelIds.length ? "disabled" : channelsChanged || embedded < indexed ? "indexing" : current.state,
+        updatedAt: changed ? Date.now() : current.updatedAt };
+      this.statuses[guildId] = reports[guildId];
+    }
+    return reports;
+  }
   remember(channel, rootId) {
     const key = `channel:${channel.id}`;
     if (!this.store.checkpoint(key)) this.store.checkpoint(key, { guildId: channel.guildId, rootId, id: channel.id, before: null, latest: null, complete: false, checkedAt: 0 });

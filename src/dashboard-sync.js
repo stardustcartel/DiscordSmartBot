@@ -62,6 +62,14 @@ class DashboardSync {
     this.guildSecrets.replaceEncryptedOpenAiFromSync(remote.guildId, remote.openaiSecret);
     const guild = client.guilds.cache.get(remote.guildId);
     if (guild) {
+      const addedKnowledgeChannels = settings.knowledgeChannelIds.filter((id) => !current.knowledgeChannelIds.includes(id));
+      if (addedKnowledgeChannels.length) Promise.allSettled(addedKnowledgeChannels.map(async (id) => {
+        const channel = await guild.channels.fetch(id);
+        if (channel?.messages) await this.knowledgeIndexer.scan(channel, true);
+      })).then((results) => {
+        const failed = results.filter((result) => result.status === "rejected").length;
+        if (failed) console.warn(`Could not promptly scan ${failed} newly selected knowledge channel(s) in ${remote.guildId}; background indexing will retry.`);
+      });
       const body = { nick: settings.profile.nickname || null, bio: settings.profile.bio || "" };
       if (settings.profile.avatarPath && fs.existsSync(settings.profile.avatarPath)) body.avatar = `data:image/${path.extname(settings.profile.avatarPath).toLowerCase() === ".jpg" ? "jpeg" : path.extname(settings.profile.avatarPath).slice(1)};base64,${fs.readFileSync(settings.profile.avatarPath).toString("base64")}`;
       if (settings.profile.bannerPath && fs.existsSync(settings.profile.bannerPath)) body.banner = `data:image/${path.extname(settings.profile.bannerPath).toLowerCase() === ".jpg" ? "jpeg" : path.extname(settings.profile.bannerPath).slice(1)};base64,${fs.readFileSync(settings.profile.bannerPath).toString("base64")}`;
@@ -77,7 +85,8 @@ class DashboardSync {
     const changedIds = [...this.pending].filter((guildId) => client.guilds.cache.has(guildId));
     changedIds.forEach((guildId) => this.pending.delete(guildId));
     try {
-      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus: this.knowledgeIndexer?.statuses || {}, openAiRuntime: Object.fromEntries(this.ai?.serviceTiers || []), bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions, knownAuditIds: this.state.knownAuditIds }) });
+      const knowledgeStatus = this.knowledgeIndexer?.reportStatuses(installedGuilds.map((guild) => guild.id)) || {};
+      const response = await fetch(`${this.config.dashboardSyncUrl}/api/internal/sync`, { method: "POST", headers: { Authorization: `Bearer ${this.config.botSyncSecret}`, "Content-Type": "application/json" }, body: JSON.stringify({ installedGuilds, knowledgeStatus, openAiRuntime: Object.fromEntries(this.ai?.serviceTiers || []), bootstrap: this.state.initialized ? [] : installedGuilds.map((guild) => this.snapshot(guild.id)), changes: changedIds.map((guildId) => this.snapshot(guildId)), knownVersions: this.state.knownVersions, knownAuditIds: this.state.knownAuditIds }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       const result = await response.json();
       for (const remote of result.states || []) await this.applyState(client, remote);

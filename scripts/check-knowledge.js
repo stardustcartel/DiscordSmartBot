@@ -62,6 +62,10 @@ async function main() {
   guild.channels = { cache: map, fetch: async (id) => id ? map.get(id) : map, fetchActiveThreads: async () => ({ threads: new Collection([[threadId, thread]]) }) };
   const client = { guilds: { cache: new Collection([[guildId, guild]]) } };
   const indexer = new KnowledgeIndexer(store, settings, { getOpenAiKey: () => "fake-key", getGeminiKey: () => "fake-gemini" });
+  indexer.statuses[guildId] = { channelIds: [rootId], indexed: 0, embedded: 0, state: "ready", updatedAt: 1 };
+  const reported = indexer.reportStatuses([guildId])[guildId];
+  assert.equal(reported.indexed, store.count(guildId), "Dashboard reports the current SQLite count, not the last slow background tick");
+  assert.equal(reported.state, "indexing", "A new unembedded message keeps the status in indexing state");
   const history = Array.from({ length: 250 }, (_, i) => message(i + 1000, `History message ${i}`));
   thread.messages = { fetch: async (opts) => {
     if (opts.message) { if (live.has(opts.message)) return live.get(opts.message); throw Object.assign(new Error("deleted"), { code: 10008 }); }
@@ -123,6 +127,15 @@ async function main() {
   assert.equal(trace.embeddingSearch.vector.length, 768);
   assert.ok(trace.embeddingSearch.matches.some((match) => match.messageId === guidance.id));
   assert.deepEqual(JSON.parse(trace.sentToAnswerModel.context).sources, prepared.records);
+  assert.equal(prepared.excludedSourceCount, 0);
+  map.set(privateRoot.id, privateRoot);
+  configurations.get(guildId).knowledgeChannelIds = [rootId, privateRoot.id];
+  const restricted = await fullRetrieval.prepare({ client, guildId, channelId: otherRoot, userId, text: "what glass do i need for headshots?" });
+  assert.equal(restricted.excludedSourceCount, 1);
+  assert.ok(JSON.parse(restricted.context).coverage.includes("Some selected channels were excluded"));
+  assert.ok(!restricted.context.includes(privateRoot.id), "Answer context must not identify the restricted channel");
+  configurations.get(guildId).knowledgeChannelIds = [rootId];
+  map.delete(privateRoot.id);
   if (process.platform !== "win32") assert.equal(fs.statSync(tracePath).mode & 0o777, 0o600);
   assert.ok(prepared.sources.some((m) => m.id === guidance.id), "Imprecise question retrieves evidence through reformulation/semantic search");
   const sourceNumber = prepared.sources.findIndex((m) => m.id === guidance.id) + 1;

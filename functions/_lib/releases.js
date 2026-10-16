@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.1.6", at: "2026-10-16T20:51:34Z", historical: false, changes: [
+    "Newly selected Discord knowledge channels are scanned promptly, and the dashboard's message count now reflects the current archive on each bot sync.",
+    "The bot and dashboard now explain when a restricted source cannot be used in a forum visible to a broader audience, without revealing private source content."
+  ] },
   { version: "2.1.5", at: "2026-10-15T23:43:43Z", historical: false, changes: [
     "Organized Knowledge Base into separate Discord and Patreon tabs under AI Integration, with each source's settings and indexing status in its own view."
   ] },
