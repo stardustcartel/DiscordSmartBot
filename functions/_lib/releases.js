@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.3.0", at: "2026-10-17T19:10:30Z", historical: false, changes: [
+    "Added structured Discord lookups for latest/earliest messages and date ranges, with validated author and channel filters instead of relying on keyword relevance.",
+    "Short replies remain eligible for chronological answers. Lookups recheck source access and message availability, log their filters and results, and explain indexed-archive coverage limits.",
+    "Ordinary topic searches retain contextual synonym expansion and conversation-aware retrieval."
+  ] },
   { version: "2.2.2", at: "2026-10-17T18:32:00Z", historical: false, changes: [
     "Knowledge searches now automatically expand relevant concepts into contextual synonyms, paraphrases, and alternative wording on every server, without requiring Behavior entries.",
     "Search logs show the generated alternatives, their reasoning, and the additional searches. Expansion reuses the existing AI planning request."
