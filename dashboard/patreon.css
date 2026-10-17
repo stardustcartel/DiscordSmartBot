@@ -1,6 +1,9 @@
 #patreon-card { margin-top: 30px; padding: 24px; border: 1px solid #9e8df044; border-radius: 18px; background: linear-gradient(145deg,#24203c,#151421); }
 #patreon-card h3 { margin: 0 0 10px; }
 #patreon-connected { margin-top: 20px; }
+.patreon-disconnect-confirm { margin: 8px 0 18px; padding: 16px; border: 1px solid #ed879055; border-radius: 12px; background: #8a34441b; }
+.patreon-disconnect-confirm p { margin: 0; line-height: 1.55; }
+.patreon-disconnect-confirm .patreon-actions { margin-bottom: 0; }
 .patreon-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
 .patreon-actions .button, #patreon-connect { background: linear-gradient(135deg,#7062ee,#8a70ed); }
 #patreon-card button:disabled { opacity: .55; cursor: not-allowed; }

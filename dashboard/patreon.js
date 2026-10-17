@@ -30,7 +30,7 @@ async function loadPatreon() {
     api(`/api/guild/${guildId}/knowledge`).then(result => result.channels).catch(() => []),
   ]);
   if (guildId !== selected || loadId !== patreonLoadId) return;
-  if (patreonGuild !== guildId) { patreonDirty = false; closePatreonMenu(); }
+  if (patreonGuild !== guildId) { patreonDirty = false; closePatreonMenu(); $('#patreon-disconnect-confirm').hidden = true; }
   patreonChannels = sourceChannels;
   patreonGuild = guildId; patreonSaved = data.channelIds || [];
   if (!patreonDirty) patreonSelected = new Set(patreonSaved);
@@ -54,7 +54,8 @@ async function patreonAction(action, extra = {}) {
   if (!guildId || patreonBusy || patreonGuild !== guildId) return;
   patreonBusy = true;
   $('#patreon-card').setAttribute('aria-busy', 'true');
-  for (const id of ['patreon-connect','patreon-reconnect','patreon-sync','patreon-disconnect','patreon-visibility-save','patreon-channel-trigger']) $('#' + id).disabled = true;
+  for (const id of ['patreon-connect','patreon-reconnect','patreon-sync','patreon-disconnect','patreon-disconnect-submit','patreon-disconnect-cancel','patreon-visibility-save','patreon-channel-trigger']) $('#' + id).disabled = true;
+  if (action === 'disconnect') $('#patreon-disconnect-submit').textContent = 'Disconnecting…';
   try {
     const result = await api(`/api/guild/${guildId}/patreon`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
     if (guildId !== selected) return;
@@ -62,13 +63,15 @@ async function patreonAction(action, extra = {}) {
     if (action === 'visibility') { patreonDirty = false; closePatreonMenu(); }
     toast(action === 'disconnect' ? 'Patreon disconnected. Imported posts will be removed.' : action === 'sync' ? 'Patreon sync requested. The bot will pick it up shortly.' : 'Patreon visibility saved.');
   } catch (error) { toast(error.message); }
-  finally { patreonBusy = false; $('#patreon-channel-trigger').disabled = false; $('#patreon-card').removeAttribute('aria-busy'); await loadPatreon().catch(() => {}); }
+  finally { patreonBusy = false; $('#patreon-channel-trigger').disabled = false; $('#patreon-disconnect-submit').disabled = false; $('#patreon-disconnect-cancel').disabled = false; $('#patreon-disconnect-submit').textContent = 'Disconnect and remove posts'; $('#patreon-disconnect-confirm').hidden = true; $('#patreon-card').removeAttribute('aria-busy'); await loadPatreon().catch(() => {}); }
 }
 function setupPatreon() {
   $('#patreon-connect').onclick = () => patreonAction('connect');
   $('#patreon-reconnect').onclick = () => patreonAction('connect');
   $('#patreon-sync').onclick = () => patreonAction('sync');
-  $('#patreon-disconnect').onclick = () => { if (confirm('Disconnect Patreon and remove its imported posts from this server’s knowledge base?')) patreonAction('disconnect'); };
+  $('#patreon-disconnect').onclick = () => { $('#patreon-disconnect-confirm').hidden = false; $('#patreon-disconnect-submit').focus(); };
+  $('#patreon-disconnect-cancel').onclick = () => { $('#patreon-disconnect-confirm').hidden = true; $('#patreon-disconnect').focus(); };
+  $('#patreon-disconnect-submit').onclick = () => patreonAction('disconnect');
   $('#patreon-visibility-form').onsubmit = event => { event.preventDefault(); patreonAction('visibility', { channelIds: [...patreonSelected] }); };
   $('#patreon-channel-trigger').onclick = () => { const open = $('#patreon-channel-options').hidden; closePatreonMenu(); $('#patreon-channel-options').hidden = !open; $('#patreon-channel-trigger').setAttribute('aria-expanded', String(open)); $('#patreon-channel-trigger').classList.toggle('open', open); };
   document.addEventListener('click', event => { if (!event.target.closest('#patreon-channel-select')) closePatreonMenu(); });

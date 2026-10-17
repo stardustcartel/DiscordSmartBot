@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.2.1", at: "2026-10-17T17:38:00Z", historical: false, changes: [
+    "Patreon Disconnect now uses an inline confirmation instead of a browser popup, with a visible progress indicator and protection against repeated clicks."
+  ] },
   { version: "2.2.0", at: "2026-10-16T21:50:30Z", historical: false, changes: [
     "Added Names & Search Associations in Behavior for nicknames, Discord identities, and context-specific related search terms.",
     "Knowledge searches now preserve question-and-answer context across members, including informal questions, pronouns, short replies, and nearby explanations. Linked context stays together through answer verification.",

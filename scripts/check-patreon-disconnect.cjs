@@ -1,0 +1,28 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const nodes = new Map();
+const $ = id => { if (!nodes.has(id)) nodes.set(id, {hidden:true, disabled:false, focus(){this.focused=true;},setAttribute(){},removeAttribute(){}}); return nodes.get(id); };
+let calls=0, release;
+const context = vm.createContext({$,selected:'test-guild',document:{addEventListener(){}},setInterval(){},toast(){},location:{},api:async(url,opts)=>{calls++; assert.equal(JSON.parse(opts.body).action,'disconnect'); await new Promise(r=>release=r); return {ok:true};}});
+vm.runInContext(fs.readFileSync('dashboard/patreon.js','utf8'),context);
+vm.runInContext("patreonGuild = selected; loadPatreon = async () => {}; setupPatreon();",context);
+(async()=>{
+  $('#patreon-disconnect').onclick();
+  assert.equal($('#patreon-disconnect-confirm').hidden,false);
+  assert.equal(calls,0,'Opening confirmation must not disconnect');
+  $('#patreon-disconnect-cancel').onclick();
+  assert.equal($('#patreon-disconnect-confirm').hidden,true);
+  assert.equal(calls,0);
+  $('#patreon-disconnect').onclick();
+  const pending=$('#patreon-disconnect-submit').onclick();
+  assert.equal(calls,1);
+  assert.equal($('#patreon-disconnect-submit').disabled,true);
+  assert.equal($('#patreon-disconnect-submit').textContent,'Disconnecting…');
+  await $('#patreon-disconnect-submit').onclick();
+  assert.equal(calls,1,'Repeated clicks must not duplicate request');
+  release(); await pending;
+  assert.equal($('#patreon-disconnect-confirm').hidden,true);
+  assert.equal($('#patreon-disconnect-submit').disabled,false);
+  console.log('Patreon inline confirmation, cancellation, request and duplicate-click guard passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
