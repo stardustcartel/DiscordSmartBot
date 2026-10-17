@@ -105,6 +105,14 @@ try {
   let found = await worker.search(guildId, channel, 'Where is the sound library?', trace);
   assert.equal(found.length, 1); assert.equal(trace.patreon.semantic, 'unavailable');
   assert.ok(cite('Download here [S1]', found).includes('https://www.patreon.com/posts/1234'));
+  const savedGenerate = worker.ai.generate;
+  worker.ai.generate = async args => args.textFormat?.name === 'knowledge_search_plan'
+    ? JSON.stringify({concepts:['audio resources'],queries:[{query:'audio resources',channelIds:[],offset:0}],expansions:[{term:'audio resources',alternatives:['sound library'],reason:'Alternative resource terminology'}]})
+    : JSON.stringify({selected:[0]});
+  const standaloneTrace = {};
+  assert.equal((await worker.search(guildId, channel, 'audio resources', standaloneTrace)).length,1);
+  assert.ok(standaloneTrace.patreon.queryExpansion.addedQueries.some(q=>q.query==='sound library'));
+  worker.ai.generate = savedGenerate;
   currentPost.attributes.content = 'The library moved.';
   assert.equal((await worker.validate(guildId, channel, found)).length, 0, 'Edited source cannot support stale answer');
   currentPost = structuredClone(post);

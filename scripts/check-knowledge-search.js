@@ -3,7 +3,7 @@ const fs = require("node:fs"), os = require("node:os"), path = require("node:pat
 const { Collection, PermissionsBitField, PermissionFlagsBits: P } = require("discord.js");
 const { KnowledgeBase } = require("../src/knowledge");
 const { audienceDecision } = require("../src/knowledge-permissions");
-const { searchKnowledge, diverseCandidates } = require("../src/knowledge-search");
+const { searchKnowledge, diverseCandidates, expandSearchPlan } = require("../src/knowledge-search");
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "smartbot-search-test-"));
 const guildId = "100000000000000001", channelId = "100000000000000002", otherId = "100000000000000003";
 const settings = { get: () => ({ knowledgeChannelIds: [channelId, otherId] }) };
@@ -12,6 +12,11 @@ function add(id, content, channelName = "discussion", channel = channelId, extra
   store.store({ id: String(id), guildId, channelId: channel, rootId: channel, channelName, content, createdTimestamp: Number(id) * 1000, ...extra });
 }
 async function main() {
+  const bounded = expandSearchPlan({queries:Array.from({length:8},(_,i)=>({query:`original ${i}`})),expansions:Array.from({length:8},(_,i)=>({term:`concept ${i}`, alternatives:[`alternative ${i}`,`other ${i}`,`third ${i}`],reason:'Context'}))});
+  assert.equal(bounded.queries.length,8);
+  assert.equal(bounded.addedQueries.length,4);
+  assert.deepEqual(bounded.addedQueries.map(q=>q.query),['alternative 0','alternative 1','alternative 2','alternative 3']);
+  assert.deepEqual(expandSearchPlan({expansions:[null,{term:4,alternatives:['x']},{}]}).addedQueries,[]);
   const topics = ["microphone", "lighting", "copyright", "business"];
   for (const [i, topic] of topics.entries()) {
     for (let n = 0; n < 100; n++) add(1000 + i * 200 + n, `What about ${topic}?`, `What about ${topic}?`);
@@ -47,6 +52,30 @@ async function main() {
   assert.deepEqual(result.map((m) => m.id), ["90000"], "AI cannot inject IDs that were not reviewed");
   assert.equal(trace.searchRounds.length, 2);
   assert.ok(!JSON.stringify(trace).includes("test-secret-never-logged"));
+  // No configured associations: automatically expanded wording must reach retrieval.
+  for (const [n, question, alternative, answer] of [
+    [0, 'how do I keep background noise out', 'acoustic treatment', 'Acoustic treatment reduced room reflections in our recordings.'],
+    [1, 'where can people join our following', 'community', 'Our community meets in the member lounge.'],
+    [2, 'cannot sign in', 'login recovery', 'Use login recovery to restore access.'],
+  ]) {
+    const id = String(300000 + n * 1000); add(id, answer);
+    retrieval.ai.generate = async args => {
+      if (args.textFormat.name === 'knowledge_search_plan') {
+        const input=JSON.parse(args.conversation[0].text);
+        assert.deepEqual(input.searchAssociations, []);
+        assert.match(args.instructions, /AUTOMATIC CONTEXTUAL EXPANSION/);
+        return JSON.stringify({concepts:[question],queries:[{query:'unmatchedoriginal',channelIds:[],offset:0}],expansions:[{term:question,alternatives:[alternative,alternative],reason:'Contextually relevant alternative wording'}]});
+      }
+      assert.ok(JSON.parse(args.conversation[0].text).candidates.some(c=>c.id===id));
+      return JSON.stringify({sufficient:true,explanation:'Alternative wording found evidence',selections:[{id,reason:'Relevant',contextIds:[]}],queries:[]});
+    };
+    const expandedTrace={};
+    const expandedResult=await searchKnowledge({retrieval,access,guildId,text:question,recentQuestions:[],trace:expandedTrace});
+    assert.ok(expandedResult.some(m=>m.id===id));
+    assert.equal(expandedTrace.queryExpansion.addedQueries.length,1,'Deduplicate alternatives');
+    assert.equal(expandedTrace.queryExpansion.addedQueries[0].query,alternative);
+    assert.equal(expandedTrace.aiCalls.length,2,'Expansion uses existing planning call');
+  }
   retrieval.ai.generate = async (args) => args.textFormat.name === "knowledge_search_plan"
     ? JSON.stringify({ concepts: ["diffuser"], queries: [{ query: "diffuser", channelIds: [], offset: 0 }] }) : "{bad JSON";
   const failureTrace = {};
