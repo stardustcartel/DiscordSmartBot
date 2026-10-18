@@ -94,7 +94,7 @@ export function cleanPost(post, campaignId) {
   if (!a.published_at || !Number.isFinite(Date.parse(a.published_at)) || Date.parse(a.published_at) > Date.now()) return null;
   let url;
   try {
-    if (typeof a.url !== 'string' || !a.url.trim() || !(a.url.startsWith('/posts/') || a.url.startsWith('https://'))) return null;
+    if (typeof a.url !== 'string' || !a.url.trim() || !(a.url.startsWith('/') || a.url.startsWith('https://'))) return null;
     url = new URL(a.url, 'https://www.patreon.com');
     if (url.protocol !== 'https:' || !['www.patreon.com', 'patreon.com'].includes(url.hostname) || url.username || url.password || url.port) return null;
   } catch { return null; }

@@ -82,6 +82,7 @@ try {
   const cleaned = cleanPost(post, '99');
   const relative = {...post, attributes:{...post.attributes,url:'/posts/1234'}};
   assert.equal(cleanPost(relative,'99').url,'https://www.patreon.com/posts/1234');
+  assert.equal(cleanPost({...post,attributes:{...post.attributes,url:'/c/creator/posts/1234'}},'99').url,'https://www.patreon.com/c/creator/posts/1234');
   for(const url of ['',null,'//evil.test/posts/1234','https://evil.test/posts/1234','/posts/\\evil.test','javascript:alert(1)','https://name:password@www.patreon.com/posts/1234']) {
     const result=cleanPost({...post,attributes:{...post.attributes,url}},'99');
     if(url==='/posts/\\evil.test') assert.equal(new URL(result.url).hostname,'www.patreon.com');
