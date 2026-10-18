@@ -93,7 +93,11 @@ export function cleanPost(post, campaignId) {
   const a = post.attributes || {};
   if (!a.published_at || !Number.isFinite(Date.parse(a.published_at)) || Date.parse(a.published_at) > Date.now()) return null;
   let url;
-  try { url = new URL(a.url); if (url.protocol !== 'https:' || !['www.patreon.com', 'patreon.com'].includes(url.hostname)) return null; } catch { return null; }
+  try {
+    if (typeof a.url !== 'string' || !a.url.trim() || !(a.url.startsWith('/posts/') || a.url.startsWith('https://'))) return null;
+    url = new URL(a.url, 'https://www.patreon.com');
+    if (url.protocol !== 'https:' || !['www.patreon.com', 'patreon.com'].includes(url.hostname) || url.username || url.password || url.port) return null;
+  } catch { return null; }
   return { id: String(post.id), title: String(a.title || 'Patreon post'), html: String(a.content || ''), publishedAt: a.published_at, url: url.href, isPublic: a.is_public === true, tiers: Array.isArray(a.tiers) ? a.tiers : [], embedUrl: typeof a.embed_url === 'string' ? a.embed_url : '' };
 }
 export async function addWebhook(env, row, base) {

@@ -76,21 +76,26 @@ class PatreonKnowledge {
         saved.eventId = event.id;
         this.store.checkpoint(key, saved);
       }
-      if (!saved.scan && (saved.revision !== meta.revision || Date.now() - (saved.lastChecked || 0) > 1800000)) {
-        saved.scan = randomUUID(); saved.cursor = null; saved.scanRevision = meta.revision;
+      if (saved.scan && saved.scanImportVersion !== 2 || !saved.scan && (saved.importVersion !== 2 || saved.revision !== meta.revision || Date.now() - (saved.lastChecked || 0) > 1800000)) {
+        saved.scan = randomUUID(); saved.cursor = null; saved.scanRevision = meta.revision; saved.scanImportVersion = 2; saved.received = 0; saved.rejected = 0;
         this.store.checkpoint(key, saved);
       }
       // Bounded pages keep this background job responsive on the small Oracle VM.
       for (let page = 0; saved.scan && page < 3; page++) {
         const result = await this.remote(guildId, { action: 'page', generation: saved.generation, cursor: saved.cursor });
         if (!result.connected) { this.purge(guildId); return; }
+        const unexpected = (result.diagnostics?.rejected || []).filter(p=>p.publishedAt && Number.isFinite(Date.parse(p.publishedAt)) && Date.parse(p.publishedAt)<=Date.now());
+        // A malformed published post is not evidence that previously indexed content was deleted.
+        if (unexpected.length) throw Error(`Patreon returned ${unexpected.length} published post(s) that could not be imported. Existing posts were preserved; synchronization will retry.`);
+        saved.received = (saved.received || 0) + (result.diagnostics?.received ?? result.posts.length);
+        saved.rejected = (saved.rejected || 0) + (result.diagnostics?.rejected?.length || 0);
         for (const post of result.posts) this.upsert(guildId, saved.generation, post, saved.scan);
         if (result.cursor && result.cursor === saved.cursor) throw Error('Patreon repeated a page. Synchronization will retry.');
         saved.cursor = result.cursor;
         if (!saved.cursor) {
           const removed = this.db.prepare('SELECT id FROM patreon_posts WHERE guildId=? AND scan!=?').all(guildId, saved.scan);
           this.store.transaction(() => removed.forEach(post => this.remove(guildId, post.id)));
-          saved.scan = null; saved.lastChecked = Date.now(); saved.revision = saved.scanRevision;
+          saved.scan = null; saved.lastChecked = Date.now(); saved.revision = saved.scanRevision; saved.importVersion = 2;
         }
         this.store.checkpoint(key, saved);
       }
@@ -104,6 +109,7 @@ class PatreonKnowledge {
         } catch { warning = 'Semantic indexing is waiting for the selected AI provider. Imported posts remain available to keyword search.'; }
       }
       const stats = this.stats(guildId, model);
+      if (!warning && !saved.scan && !stats.indexed) warning = saved.rejected ? 'Patreon returned posts, but none are published and eligible for indexing yet. Check draft and scheduled-post status in Patreon.' : 'Patreon returned no posts for the connected campaign. Check that your posts are published on this creator page, then choose Sync now.';
       await this.remote(guildId, { action: 'status', generation: saved.generation, eventId: saved.eventId, status: { ...stats, state: warning ? 'partial' : saved.scan || stats.embedded < stats.chunks ? 'indexing' : 'ready', backfilling: Boolean(saved.scan), lastChecked: saved.lastChecked || null, warning, webhook: meta.webhook } });
     } catch (error) {
       if (meta?.connected) await this.remote(guildId, { action: 'status', generation: meta.generation, status: { ...this.stats(guildId, modelFor(this.indexer.credentials(guildId).provider)), state: 'error', lastChecked: saved.lastChecked || null, warning: error.message } }).catch(() => {});

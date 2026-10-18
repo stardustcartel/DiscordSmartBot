@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.3.2", at: "2026-10-18T19:18:00Z", historical: false, changes: [
+    "Fixed Patreon posts being skipped when Patreon supplies relative post links. Valid links are now normalized to full Patreon URLs, and existing connections automatically rescan.",
+    "Empty imports now show helpful guidance. Rejected published posts report an error and preserve existing indexed content instead of silently appearing ready."
+  ] },
   { version: "2.3.1", at: "2026-10-18T19:14:00Z", historical: false, changes: [
     "Added safe Patreon import diagnostics to distinguish empty API responses from posts rejected during import, without exposing credentials or post bodies."
   ] },

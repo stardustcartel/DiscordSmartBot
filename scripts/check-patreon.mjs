@@ -80,6 +80,18 @@ try {
   assert.equal((await (await runInternal({ action: 'page' })).json()).cursor, 'page-two');
   malformed = true; assert.equal((await runInternal({ action: 'page' })).status, 502); malformed = false; nextCursor = null;
   const cleaned = cleanPost(post, '99');
+  const relative = {...post, attributes:{...post.attributes,url:'/posts/1234'}};
+  assert.equal(cleanPost(relative,'99').url,'https://www.patreon.com/posts/1234');
+  for(const url of ['',null,'//evil.test/posts/1234','https://evil.test/posts/1234','/posts/\\evil.test','javascript:alert(1)','https://name:password@www.patreon.com/posts/1234']) {
+    const result=cleanPost({...post,attributes:{...post.attributes,url}},'99');
+    if(url==='/posts/\\evil.test') assert.equal(new URL(result.url).hostname,'www.patreon.com');
+    else assert.equal(result,null);
+  }
+  postList=[relative];
+  const relativePage=await (await runInternal({action:'page'})).json();
+  assert.equal(relativePage.posts.length,1);
+  assert.equal(relativePage.diagnostics.received,1);
+  assert.equal(relativePage.diagnostics.accepted,1);
   assert.ok(postText(cleaned).includes('https://example.test/library'));
   assert.equal(cleanPost(post, 'different'), null);
   assert.equal(cleanPost({ ...post, attributes: { ...post.attributes, published_at: null } }, '99'), null);
@@ -130,7 +142,11 @@ try {
   await runAction({ action: 'sync' }); malformed = true;
   await worker.tickGuild(guildId);
   assert.equal(worker.stats(guildId, 'none').indexed, 2);
-  malformed = false; await worker.tickGuild(guildId);
+  malformed = false;
+  postList=[{...post,attributes:{...post.attributes,url:'https://evil.test/posts/1234'}}];
+  await worker.tickGuild(guildId);
+  assert.equal(worker.stats(guildId,'none').indexed,2,'Rejected published posts must not trigger pruning');
+  postList=[relative]; await worker.tickGuild(guildId);
   assert.equal(worker.stats(guildId, 'none').indexed, 1, 'Only a completed scan prunes missing posts');
   await runAction({ action: 'disconnect' });
   assert.equal((await worker.validate(guildId, thread, found)).length, 0);
