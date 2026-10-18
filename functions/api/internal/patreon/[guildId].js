@@ -30,7 +30,9 @@ export async function onRequestPost({ env, request, params }) {
       if (result.data.some(post => post?.type !== 'post' || String(post.relationships?.campaign?.data?.id || '') !== row.campaign_id)) throw Error('Patreon returned posts without a verifiable campaign. No archived posts were removed.');
       let cursor = result.meta?.pagination?.cursors?.next || null;
       if (result.links?.next) { const next = new URL(result.links.next); cursor = next.searchParams.get('page[cursor]'); if (!cursor) throw Error('Patreon pagination could not be continued.'); }
-      return json({ ...meta, posts: result.data.map(post => cleanPost(post, row.campaign_id)).filter(Boolean), cursor });
+      const posts = result.data.map(post => cleanPost(post, row.campaign_id)).filter(Boolean);
+      const diagnostics = { received: result.data.length, accepted: posts.length, rejected: result.data.filter(p=>!posts.some(accepted=>accepted.id===String(p.id))).map(p=>({id:String(p.id),publishedAt:p.attributes?.published_at || null,urlKind:typeof p.attributes?.url!=='string'?'missing':p.attributes.url.startsWith('/')?'relative':p.attributes.url.startsWith('https://')?'https':'other'})) };
+      return json({ ...meta, posts, cursor, diagnostics });
     }
     if (body.action === 'posts') {
       if (!Array.isArray(body.ids) || body.ids.length > 8 || body.ids.some(id => !/^\d+$/.test(String(id)))) return json({ error: 'Invalid post IDs' }, 400);

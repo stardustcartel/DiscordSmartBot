@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.3.1", at: "2026-10-18T19:14:00Z", historical: false, changes: [
+    "Added safe Patreon import diagnostics to distinguish empty API responses from posts rejected during import, without exposing credentials or post bodies."
+  ] },
   { version: "2.3.0", at: "2026-10-17T19:10:30Z", historical: false, changes: [
     "Added structured Discord lookups for latest/earliest messages and date ranges, with validated author and channel filters instead of relying on keyword relevance.",
     "Short replies remain eligible for chronological answers. Lookups recheck source access and message availability, log their filters and results, and explain indexed-archive coverage limits.",
