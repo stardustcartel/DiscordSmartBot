@@ -113,7 +113,7 @@ function setupFiles(){
     fileFolders.push({id,name:`Folder ${id.slice(0,12)}…`});$('#file-folder-url').value='';fileFolderSelection();
   };
   $('#file-folder-save').onclick=()=>fileAction('folders',{folderIds:fileFolders.map(f=>f.id)});
-  $('#file-upload-input').onchange=()=>{$('#file-upload-save').disabled=!fileConfigured || !$('#file-upload-input').files.length;};
+  $('#file-upload-input').onchange=()=>{const files=$('#file-upload-input').files;$('#file-upload-label').textContent=!files.length?'Choose files':files.length===1?files[0].name:`${files.length} files selected`;$('#file-upload-save').disabled=!fileConfigured || !files.length;};
   $('#file-upload-form').onsubmit=async event=>{event.preventDefault();const guildId=selected,files=[...$('#file-upload-input').files];if(!guildId || !files.length || fileBusy)return;
     fileBusy=true;$('#file-upload-save').disabled=true;
     try{for(const file of files){const form=new FormData();form.append('file',file);form.append('description',$('#file-upload-description').value);

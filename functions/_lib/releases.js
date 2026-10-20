@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.4.1", at: "2026-10-20T20:07:33Z", historical: false, changes: [
+    "Restyled Google Drive and document controls to match the dashboard buttons, and highlighted document visibility and indexing in purple feature cards at the top of the tab."
+  ] },
   { version: "2.4.0", at: "2026-10-20T19:05:36Z", historical: false, changes: [
     "Added Files & Google Drive to Knowledge Base, with document uploads, private folder synchronization, per-server indexing and downloadable diagnostics. Connection requires the service owner's storage and Google OAuth setup.",
     "Document excerpts now join Discord and Patreon knowledge searches with source verification and citations. Knowledge-backed answers better preserve the server's configured personality."
