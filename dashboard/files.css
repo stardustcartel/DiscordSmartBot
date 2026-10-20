@@ -15,6 +15,7 @@
 #files .file-feature-card{border:1px solid #8b80f0;border-left:4px solid #9b8aff;background:linear-gradient(135deg,#343160,#252447 58%,#1d1d32);box-shadow:0 14px 36px #6d5af12b,inset 0 1px #c2baff24}
 #files .file-feature-card h3{font-size:18px;color:#fff}
 #files .file-primary-button{justify-self:start;min-width:200px;min-height:43px;border:1px solid #9295ff55;border-radius:10px;background:linear-gradient(135deg,#5865f2,#7b68ee);box-shadow:0 8px 22px #5865f233;color:#fff;padding:11px 16px;font:700 13px Manrope;cursor:pointer;transition:background .18s,transform .18s,box-shadow .18s}
+#files .file-feature-card > .file-primary-button{margin-top:17px}
 #files .file-primary-button:hover:not(:disabled){background:linear-gradient(135deg,#6874ff,#8b79ff);box-shadow:0 10px 26px #5865f244;transform:translateY(-1px)}
 #files .file-primary-button:disabled{background:#383848;border-color:#555467;box-shadow:none;color:#aaa9b9;opacity:.75;cursor:not-allowed;transform:none}
 #files .file-picker{width:min(100%,360px)}
