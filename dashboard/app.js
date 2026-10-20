@@ -287,6 +287,7 @@ function showWorkspace(tab = "overview") {
   $("#knowledge-tab").setAttribute("aria-expanded", "false");
   $("#knowledge-discord-tab").hidden = true;
   $("#knowledge-patreon-tab").hidden = true;
+  $("#knowledge-files-tab").hidden = true;
   setHelpExpanded(false);
   knowledgeDirty = false;
   knowledgePolicyDirty = false;
@@ -300,13 +301,14 @@ function showWorkspace(tab = "overview") {
 }
 function setPersonalityLock(locked) { const button = $("#personality-tab"); if (!button) return; const icon = button.querySelector(".lock-icon"); button.disabled = locked; button.classList.toggle("locked", locked); button.querySelector(".subtab-copy small").textContent = locked ? "Add an AI key first" : "Ready to customize"; icon.textContent = locked ? String.fromCodePoint(0x1F512) : ""; icon.hidden = !locked; }
 function showTab(tab) {
-  const aiSection = ["gemini", "personality", "knowledge", "patreon"].includes(tab);
-  const knowledgeSection = tab === "knowledge" || tab === "patreon";
+  const aiSection = ["gemini", "personality", "knowledge", "patreon", "files"].includes(tab);
+  const knowledgeSection = ["knowledge", "patreon", "files"].includes(tab);
   $("#personality-tab").hidden = !aiSection;
   $("#knowledge-tab").hidden = !aiSection;
   $("#knowledge-tab").setAttribute("aria-expanded", String(knowledgeSection));
   $("#knowledge-discord-tab").hidden = !knowledgeSection;
   $("#knowledge-patreon-tab").hidden = !knowledgeSection;
+  $("#knowledge-files-tab").hidden = !knowledgeSection;
   const button = $(`.tab[data-tab="${tab}"], .subtab[data-tab="${tab}"]`);
   if (button?.disabled) return toast("Connect a valid AI key to unlock Behavior.");
   setHelpExpanded(["support", "version-history"].includes(tab));
@@ -321,6 +323,8 @@ function showTab(tab) {
   else closeKnowledgeMenu();
   if (tab === "patreon") loadPatreon().catch((error) => toast(error.message));
   else closePatreonMenu();
+  if (tab === "files") loadFiles().catch((error) => toast(error.message));
+  else closeFileChannelMenu();
   requestAnimationFrame(updateMobileNavHint);
 }
 function renderServers(guilds) {
@@ -376,6 +380,13 @@ async function load() {
         "save-failed": "Patreon authorized your account, but the dashboard could not save the connection. Please contact support."
       };
       toast(patreonMessages[outcome] || "Patreon could not be connected. Please try again.");
+      history.replaceState(null, "", location.pathname);
+    }
+    if (returned.has("google")) {
+      const guild = me.guilds.find(item => item.id === returned.get("guild"));
+      if (guild) { await selectGuild(guild.id, guild); showTab("files"); }
+      const messages = { connected: "Google Drive connected. Select the folders to import.", cancelled: "Google Drive connection cancelled.", "session-expired": "Connection expired. Sign in and try again.", "authorization-failed": "Google did not authorize this connection. Check your Google OAuth setup.", "account-unavailable": "Could not read this Google Drive account. Try connecting again.", "save-failed": "Could not save the Google Drive connection. Try again." };
+      toast(messages[returned.get("google")] || "Google Drive could not be connected.");
       history.replaceState(null, "", location.pathname);
     }
   } catch (error) { if (error.code === "DASHBOARD_API_UNAVAILABLE") $("#setup-notice").textContent = "Secure dashboard sign-in is being connected."; else toast(error.message); }
@@ -553,8 +564,9 @@ $("#knowledge-tab").onclick = () => {
     $("#knowledge-tab").setAttribute("aria-expanded", "false");
     $("#knowledge-discord-tab").hidden = true;
     $("#knowledge-patreon-tab").hidden = true;
+    $("#knowledge-files-tab").hidden = true;
     requestAnimationFrame(updateMobileNavHint);
-  } else showTab($("#patreon").classList.contains("active") ? "patreon" : "knowledge");
+  } else showTab($("#files").classList.contains("active") ? "files" : $("#patreon").classList.contains("active") ? "patreon" : "knowledge");
 };
 $("#help-tab").onclick = () => setHelpExpanded($("#help-tab").getAttribute("aria-expanded") !== "true");
 document.querySelectorAll("[data-open]").forEach((button) => { button.onclick = (event) => { if (button.tagName === "A") event.preventDefault(); showTab(button.dataset.open); }; });
@@ -677,5 +689,6 @@ setupMobileNavigationHint();
 setupKnowledge();
 setupBehavior();
 setupPatreon();
+setupFiles();
 updateSaveButtons();
 load();

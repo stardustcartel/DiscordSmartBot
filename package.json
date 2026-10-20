@@ -1,6 +1,6 @@
 {
   "name": "discord-smart-bot",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "private": true,
   "description": "A shared Discord bot with per-server Gemini or OpenAI settings",
   "main": "src/index.js",
@@ -21,7 +21,8 @@
     "set:gemini-key": "node scripts/set-guild-gemini-key.js",
     "check:knowledge": "node --no-warnings scripts/check-knowledge.js && node --no-warnings scripts/check-knowledge-search.js && node --no-warnings scripts/check-knowledge-groups.js && node --no-warnings scripts/check-knowledge-dashboard.mjs && node scripts/check-knowledge-policy.js && node scripts/check-knowledge-ui.js && node scripts/check-dashboard-save-buttons.js",
     "check:auto-response": "node --no-warnings scripts/check-auto-response.mjs",
-    "check:settings-audit": "node --no-warnings scripts/check-settings-audit.mjs"
+    "check:settings-audit": "node --no-warnings scripts/check-settings-audit.mjs",
+    "check:files": "node --no-warnings scripts/check-files.mjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -30,6 +31,9 @@
     "@google/genai": "^1.52.0",
     "discord.js": "^14.21.0",
     "dotenv": "^17.2.1",
-    "html-to-text": "^10.0.1"
+    "fast-xml-parser": "^5.11.2",
+    "fflate": "^0.8.3",
+    "html-to-text": "^10.0.1",
+    "pdfjs-dist": "^5.6.205"
   }
 }

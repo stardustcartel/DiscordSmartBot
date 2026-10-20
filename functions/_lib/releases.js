@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.4.0", at: "2026-10-20T19:05:36Z", historical: false, changes: [
+    "Added Files & Google Drive to Knowledge Base, with document uploads, private folder synchronization, per-server indexing and downloadable diagnostics. Connection requires the service owner's storage and Google OAuth setup.",
+    "Document excerpts now join Discord and Patreon knowledge searches with source verification and citations. Knowledge-backed answers better preserve the server's configured personality."
+  ] },
   { version: "2.3.3", at: "2026-10-18T19:19:00Z", historical: false, changes: [
     "Expanded Patreon link normalization to support creator-prefixed post paths while continuing to reject links outside Patreon."
   ] },

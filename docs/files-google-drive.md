@@ -1,0 +1,23 @@
+# Files and Google Drive knowledge
+
+The dashboard's **AI Integration → Knowledge Base → Files & Google Drive** tab accepts TXT, MD, CSV, DOCX, XLSX, and text based PDF documents. It stores the original in a private Cloudflare R2 bucket, extracts and indexes text on the Oracle SmartBot instance, and stores extracted text back in R2 for authenticated dashboard downloads. Google Docs export as text and Google Sheets export as XLSX. Linked pages, images, scanned PDFs without OCR, videos, audio, and attached files within documents are not transcribed.
+
+## Production setup
+
+1. In Cloudflare, create a **private** R2 bucket, for example `discordsmartbot-knowledge-files`. Do not enable its public development URL or a public custom domain. In the existing Pages project, add a production **R2 bucket binding** whose variable name is exactly `KNOWLEDGE_FILES` and whose bucket is the one you just created. Redeploy Pages so the binding takes effect. The existing `BOT_SYNC_SECRET`, `GUILD_SECRETS_KEY`, Discord settings, D1 binding, and `BOT_ASSETS` binding remain unchanged. The bot already uses the same Oracle `BOT_SYNC_SECRET` and `DASHBOARD_SYNC_URL` as Patreon synchronization.
+2. In a Google Cloud project owned by the bot operator, enable the Google Drive API. Configure an OAuth consent screen and create a **Web application** OAuth client. Its authorized redirect URI must be exactly `https://discordsmartbot.pages.dev/auth/google/callback` (or the corresponding HTTPS `DASHBOARD_PUBLIC_URL` if the production dashboard has a custom domain).
+3. Add the OAuth client ID as the Cloudflare Pages production text variable `GOOGLE_CLIENT_ID` and the OAuth client secret as a Pages production secret `GOOGLE_CLIENT_SECRET`. Redeploy Pages. Never place either value in the repository or a dashboard setting. The Google account that connects through the dashboard must be able to read the chosen folders and files. Private folders are supported; users do not need to change sharing to “anyone with the link.” Organization policies or disabled downloads can still prevent import and will be reported.
+4. Connect Google Drive on a server dashboard, browse the accessible folder tree, select up to 10 folders, and save. The bot scans selected folders and their subfolders. A dashboard user can also upload supported files without connecting Google Drive.
+
+The OAuth scope used for automatic folder scanning is `https://www.googleapis.com/auth/drive.readonly`. Google categorizes this as a **restricted scope**. A public app may require OAuth verification and, because files are stored on a server, a security assessment. While the OAuth app is in testing, only users listed as Google OAuth test users can connect, and refresh access may be short lived. Plan for Google's publication requirements before offering Drive connection broadly. The manual upload path does not require Google OAuth.
+
+## Limits and checks
+
+- 10 MiB per original file, 50 files and 100 MiB per server, 2 GiB across this bot's R2 library. The bot extracts at most 750,000 text characters per file. A single extraction runs in a child process with a 192 MB heap limit and a 45 second timeout.
+- The bot imports one new document per server pass and embeds four text sections per pass. It reuses the existing search plan and query embedding when available; it does not add a separate AI generation request per answer for the file library. New or changed text sections use the server's selected AI provider for semantic indexing.
+- The dashboard shows each file's status, checksum, revision, storage object key, extraction location, original download, extracted text download, and a downloadable activity log. The Oracle bot writes per-server ingest history to `data/files/<server-id>/history.jsonl`; response retrievals and selected excerpts appear in `data/knowledge-search/<server-id>/history.jsonl`.
+- Removing a file through the dashboard removes it from source selection immediately. Google Drive disconnect removes its imported files and credentials. All dashboard downloads require access to that server's dashboard.
+
+On Windows, a dashboard manager can download logs directly with **Download file activity log**. For Oracle logs, adapt the existing SmartBot SSH command to copy `data/files/<server-id>/history.jsonl` and `data/knowledge-search/<server-id>/history.jsonl` from `/home/ubuntu/discord-smart-bot/`.
+
+Setup references: [Cloudflare Pages R2 bindings](https://developers.cloudflare.com/pages/functions/bindings/), [Google Drive API scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).

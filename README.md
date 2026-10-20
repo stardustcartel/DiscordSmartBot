@@ -303,6 +303,8 @@ Permission checks run outside the model. A source needs current read/history acc
 
 Run `npm run check:knowledge` for isolated SQLite, backfill, retrieval, permission, API-fallback, and dashboard-sync checks. These use synthetic messages and mocked providers, not customer data or credits.
 
+For document uploads and Google Drive folder synchronization, see [Files and Google Drive setup](docs/files-google-drive.md). This feature needs a private Cloudflare R2 binding; automatic Drive folder access also needs a Google OAuth application.
+
 ## Near-real-time YouTube announcements
 
 The dashboard's existing YouTube notification form also subscribes to YouTube's WebSub push hub. No YouTube channel login or YouTube API key is required. The hub calls `https://discordsmartbot.pages.dev/api/youtube/webhook` when it detects a new upload; delivery is usually much faster than the five-minute feed poll, but YouTube does not guarantee an exact delay. The Oracle feed poll remains enabled to catch missed push notices.
