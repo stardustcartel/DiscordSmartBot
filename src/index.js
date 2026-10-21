@@ -31,6 +31,8 @@ const { createDashboard } = require("./dashboard");
 const { DashboardSync } = require("./dashboard-sync");
 const { ensureParentDirectory } = require("./storage");
 const { shouldAutoRespond } = require("./bot-response");
+const { loadThreadContext, ThreadQueue } = require('./thread-context');
+const threadQueue = new ThreadQueue();
 
 if (!config.discordToken) {
   throw new Error("DISCORD_TOKEN is missing from .env");
@@ -385,12 +387,13 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
   const apiKey = guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "";
   const destination = guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
   const policy = effectivePolicy(settings.knowledgePolicy, destination);
+  const threadConversation = await loadThreadContext({client,channel:destination,userId,messageId});
   let prepared;
   if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || knowledge.checkpoint(`patreon:${guildId}`)?.generation || filesKnowledge.has(guildId) || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
-    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId, behavior: settings });
+    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId, behavior: settings, threadConversation });
   }
   const response = await ai.respond({
     apiKey,
@@ -405,8 +408,8 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
     rules: settings.rules,
     responseLimit: settings.aiResponsesPerHour,
     conversationId: channelId,
-    context: prepared?.context,
-    forgetHistory: Boolean(prepared),
+    context: prepared?.context || (threadConversation ? JSON.stringify({threadConversation}) : ''),
+    forgetHistory: Boolean(prepared || threadConversation),
     reserved: Boolean(prepared),
     knowledgePolicy: policy,
   });
@@ -414,12 +417,22 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
 }
 
 async function handleChatInteraction(interaction) {
+  // Acknowledge promptly even while an earlier thread answer is finishing.
+  if (interaction.channel?.isThread?.() && canUseBotInGuild({guildId:interaction.guildId,channelId:interaction.channelId,parentChannelId:interaction.channel?.parentId,member:interaction.member})) {
+    await interaction.deferReply();
+    return threadQueue.run(interaction.channel,()=>handleChatInteractionNow(interaction));
+  }
+  return handleChatInteractionNow(interaction);
+}
+
+async function handleChatInteractionNow(interaction) {
   const text = interaction.options.getString("message", true).trim();
   if (!canUseBotInGuild({ guildId: interaction.guildId, channelId: interaction.channelId, parentChannelId: interaction.channel?.parentId, member: interaction.member })) {
-    await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
+    if (interaction.deferred) await interaction.editReply({content:"You do not have access to chat with the bot in this channel."});
+    else await interaction.reply({ content: "You do not have access to chat with the bot in this channel.", ephemeral: true });
     return;
   }
-  await interaction.deferReply();
+  if (!interaction.deferred) await interaction.deferReply();
   try {
     const response = await requestAiResponse({
       guildId: interaction.guildId,
@@ -1017,6 +1030,11 @@ async function isReplyToBot(message) {
 }
 
 async function handleTextChat(message, text) {
+  return threadQueue.run(message.channel,()=>handleTextChatNow(message,text));
+}
+
+async function handleTextChatNow(message, text) {
+  if (message.guildId && !canUseBotInGuild({guildId:message.guildId,channelId:message.channelId,parentChannelId:message.channel?.parentId,member:message.member})) return;
   if (!text) {
     await message.reply({
       content: "Send me a question or message and I will do my best to help.",
@@ -1128,7 +1146,7 @@ client.on(Events.MessageDelete, (message) => {
 });
 client.on(Events.MessageBulkDelete, (messages) => { for (const message of messages.values()) knowledge.remove(message); });
 client.on(Events.ChannelDelete, (channel) => knowledge.removeChannel(channel.id));
-client.on(Events.ThreadDelete, (thread) => knowledge.removeChannel(thread.id));
+client.on(Events.ThreadDelete, (thread) => { knowledge.removeChannel(thread.id); knowledgeRetrieval.research.remove(thread.guildId,thread.id); });
 client.on(Events.ThreadCreate, (thread) => {
   if (guildSettings.get(thread.guildId).knowledgeChannelIds.includes(thread.parentId) && thread.type !== ChannelType.PrivateThread) {
     knowledgeIndexer.scan(thread).catch(() => {});

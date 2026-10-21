@@ -89,6 +89,16 @@ EnvironmentFile fields in the service file before installing it.
 
 ## Behavior and release history
 
+### Forum follow-ups and research reuse
+
+Forum replies use the latest message as the request and read the opening post, explicit reply target, and recent human/bot messages directly from Discord. This shared context works across participants and restarts, includes at most 16 messages / 12,000 characters (4,000 per message), and never makes an earlier bot answer factual evidence. Messages are fetched again on each turn so edits, deletions and current access are respected. Thread requests are queued through delivery to keep simultaneous responses ordered.
+
+For threads selected for Discord indexing, `knowledge.sqlite` contains a separate `thread_research` table keyed by server and thread. It retains bounded candidate references, external excerpts, previous queries and search stopping information for up to seven days, with at most 1,000 thread records. It does not insert bot messages into searchable knowledge. Cache access checks, current source validation, current policies and final evidence review still run. Excluded threads use live conversation context without persisting this research cache.
+
+The existing search-planning call resolves the newest request, tracks examples already suggested, selects reusable evidence and requests targeted searches for missing information. Reuse can skip keyword/embedding searches; mixed questions can reuse evidence and search for their new parts. The existing relevance reviewer can request another bounded search if cached evidence is insufficient. No extra AI call is added specifically for conversation memory. Context still consumes input tokens; long conversations are bounded rather than sent in full.
+
+The existing private `data/knowledge-search/<server-id>/history.jsonl` includes `threadConversation`, `researchReuse`, `followup`, `researchCandidates`, `stopReason`, and final `usedSources` / `finalAnswer`. These show included and omitted history, validated/rejected cached groups, resolved questions, previous examples, targeted searches and source usage. Source IDs are renumbered for each answer. Use `npm run check:thread-followups` with Node 22.13+ for regression checks.
+
 AI Integration → Behavior has three independently saved sections:
 
 - **Personality:** voice, tone, and presentation preferences. Existing personality text is preserved; administrators reorganize it themselves.
