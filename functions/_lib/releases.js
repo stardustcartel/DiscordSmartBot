@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.5.3", at: "2026-10-21T23:56:05Z", historical: false, changes: [
+    "Updated the homepage word cloud artwork."
+  ] },
   { version: "2.5.2", at: "2026-10-21T23:50:16Z", historical: false, changes: [
     "Updated the homepage word cloud artwork."
   ] },
