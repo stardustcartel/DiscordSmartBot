@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.4.3", at: "2026-10-21T19:47:00Z", historical: false, changes: [
+    "File and Google Drive citations now use a single moderator-added document notice instead of document names or Drive links; Discord and Patreon citations remain available.",
+    "Refreshed Files & Google Drive buttons, combined visibility and indexing into one card, added a clear-files control and Google Drive logo, and show the connected account's email.",
+    "Knowledge Base and its subtabs now unlock after an AI key is added. AI Integration can be collapsed by clicking its heading."
+  ] },
   { version: "2.4.2", at: "2026-10-20T20:10:52Z", historical: false, changes: [
     "Added breathing room above Save document visibility and renamed the upload context field to File Context."
   ] },

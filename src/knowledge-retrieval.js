@@ -17,19 +17,21 @@ function mergeRankings(lists) {
   return [...merged.values()].sort((a, b) => b.score - a.score);
 }
 function cite(answer, sources) {
+  let usedDocument = false;
   // Source URLs come from Discord IDs in our database, never from generated output.
-  return String(answer).replace(/https?:\/\/(?:\w+\.)?discord(?:app)?\.com\/channels\/[^\s)>]+/gi, "[source link omitted]")
+  const rendered = String(answer).replace(/https?:\/\/(?:\w+\.)?discord(?:app)?\.com\/channels\/[^\s)>]+/gi, "[source link omitted]")
     .replace(/\[S(\d+)\]/g, (_, n) => {
       const source = sources[Number(n) - 1];
       if (!source) return "";
       if (source.sourceType === "patreon") return `[Patreon source ${n}](${source.url.replace(/\(/g, '%28').replace(/\)/g, '%29')})`;
-      if (source.sourceType === "file") return source.url ? `[Document source ${n}](${source.url})` : `[Uploaded document ${n}: ${source.title}]`;
+      if (source.sourceType === "file") { usedDocument = true; return ""; }
       if (source.sourceType === "approved_answer") {
         const url = safeResourceUrl(source.url);
         return url ? `[Official server guidance ${n}](${url.replace(/[()]/g, (c) => c === "(" ? "%28" : "%29")})` : `[Official server guidance ${n}]`;
       }
       return `[source ${n}](${source.url})`;
     });
+  return usedDocument ? `${rendered.trim()}\n\n[Some information in this answer comes from documents added to our knowledge base by server moderators, rather than messages on our server.]` : rendered;
 }
 class KnowledgeRetrieval {
   constructor(store, indexer, ai, dataDirectory = null) { this.store = store; this.indexer = indexer; this.ai = ai; this.questions = new Map(); this.traceDirectory = dataDirectory && path.join(dataDirectory, "knowledge-search"); }

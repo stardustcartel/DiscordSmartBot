@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {filesSchema,saveFile,fileMeta,removeFile,sha256} from '../functions/_lib/files.js';
-import {syncDrive} from '../functions/_lib/google-drive.js';
+import {syncDrive,googleAccountEmail} from '../functions/_lib/google-drive.js';
+import {cite} from '../src/knowledge-retrieval.js';
 import {encryptGuildKey} from '../functions/_lib/gemini-secret.js';
 import {onRequestPost as internalFiles} from '../functions/api/internal/files/[guildId].js';
 import {FilesKnowledge,sections} from '../src/files-knowledge.js';
@@ -16,6 +17,13 @@ const objects=new Map();
 const env={DB:db,KNOWLEDGE_FILES:{async put(key,value){objects.set(key,value);},async get(key){const value=objects.get(key);return value==null?null:{body:new Response(value).body};},async delete(keys){for(const key of Array.isArray(keys)?keys:[keys])objects.delete(key);}}};
 const a='1218340601968197712',b='1545533279766319215',bytes=new TextEncoder().encode('Creator transcript. A direct answer appears here.');
 await filesSchema(db);
+await filesSchema(db); // Existing installations can repeat schema setup safely.
+const documentSources=[{sourceType:'file',title:'private.txt'}, {sourceType:'file',url:'https://drive.google.com/open?id=private',title:'Drive transcript'}, {url:'https://discord.com/channels/1/2/3'}];
+const cited=cite('First fact [S1]. Another fact [S2]. Server fact [S3].',documentSources);
+assert.ok(!cited.includes('private.txt') && !cited.includes('drive.google.com'));
+assert.equal((cited.match(/documents added to our knowledge base/g)||[]).length,1,'document notice appears once even for multiple file sources');
+assert.ok(cited.includes('[source 3](https://discord.com/channels/1/2/3)'));
+assert.equal(cite('No document citation.',documentSources),'No document citation.');
 const saved=await saveFile(env,a,{name:'Meeting.txt',description:'Q&A transcript',actorId:'1079143480988799046'},bytes);
 assert.equal((await fileMeta(env,a)).files.length,1);
 assert.equal((await fileMeta(env,b)).files.length,0);
@@ -32,6 +40,13 @@ const tokenKey=Buffer.alloc(32,7).toString('base64');env.GUILD_SECRETS_KEY=token
 const testToken={access_token:'test-only',refresh_token:'test-refresh',expires_in:3600};
 await db.prepare('INSERT INTO google_connections(guild_id,generation,name,token_json,expires_at,folders_json,connected_by,connected_at) VALUES (?,?,?,?,?,?,?,?)').bind(b,'gen-test','Test Google',JSON.stringify(await encryptGuildKey(JSON.stringify(testToken),tokenKey)),Date.now()+3600000,JSON.stringify([{id:'folder-test',name:'Q&A'}]),'user',Date.now()).run();
 const originalFetch=globalThis.fetch;
+let identityReads=0;
+globalThis.fetch=async()=>{identityReads++;return Response.json({user:{emailAddress:'test@example.test'}});};
+try {
+  assert.equal(await googleAccountEmail(env,await db.prepare('SELECT * FROM google_connections WHERE guild_id=?').bind(b).first()),'test@example.test');
+  assert.equal(await googleAccountEmail(env,await db.prepare('SELECT * FROM google_connections WHERE guild_id=?').bind(b).first()),'test@example.test');
+  assert.equal(identityReads,1,'existing accounts fetch their email once and then reuse storage');
+} finally {globalThis.fetch=originalFetch;}
 globalThis.fetch=async input=>{const url=new URL(input);
   if(url.pathname.endsWith('/files') && url.searchParams.has('q'))return Response.json({files:[{id:'document-test',name:'Drive.txt',mimeType:'text/plain',size:String(bytes.length),modifiedTime:'2026-10-20T00:00:00Z',parents:['folder-test']}],nextPageToken:null});
   if(url.pathname.endsWith('/files/document-test') && url.searchParams.get('alt')==='media')return new Response(bytes);

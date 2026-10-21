@@ -1,7 +1,7 @@
 import { json, cookie, publicUrl, seal } from '../../../_lib/auth.js';
 import { authorizedGuild } from '../../../_lib/authorize.js';
 import { filesSchema, fileMeta, fileEvent, saveFile, removeFile } from '../../../_lib/files.js';
-import { googleConfigured, driveScope, driveFile, driveRequest, googleToken } from '../../../_lib/google-drive.js';
+import { googleConfigured, driveScope, driveFile, driveRequest, googleToken, googleAccountEmail } from '../../../_lib/google-drive.js';
 import { fileChannels, fileLimits, limitedBytes, validFileId } from '../../../../shared/files.mjs';
 
 const noStore = {'Cache-Control':'no-store'};
@@ -23,7 +23,8 @@ export async function onRequestGet({env,request,params}) {
     return new Response(text,{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="file-ingestion-events.jsonl"',...noStore}});
   }
   const status=meta.files.reduce((v,f)=>(v[f.state]=(v[f.state]||0)+1,v),{});
-  return json({configured:Boolean(env.KNOWLEDGE_FILES && env.BOT_SYNC_SECRET),googleConfigured:googleConfigured(env),google:meta.google?{connected:true,name:meta.google.name,folders:JSON.parse(meta.google.folders_json),sync:JSON.parse(meta.google.sync_json)}:{connected:false},channelIds:meta.channelIds,files:meta.files.map(publicRow),status,limits:{maxFile:fileLimits.bytes,maxCount:fileLimits.count,maxGuildBytes:fileLimits.guildBytes}},200,noStore);
+  const email=meta.google?await googleAccountEmail(env,meta.google):'';
+  return json({configured:Boolean(env.KNOWLEDGE_FILES && env.BOT_SYNC_SECRET),googleConfigured:googleConfigured(env),google:meta.google?{connected:true,name:meta.google.name,email,folders:JSON.parse(meta.google.folders_json),sync:JSON.parse(meta.google.sync_json)}:{connected:false},channelIds:meta.channelIds,files:meta.files.map(publicRow),status,limits:{maxFile:fileLimits.bytes,maxCount:fileLimits.count,maxGuildBytes:fileLimits.guildBytes}},200,noStore);
 }
 export async function onRequestPost({env,request,params}) {
   const access=await authorizedGuild(env,request,params.guildId); if(!access) return deny();

@@ -22,6 +22,7 @@ export async function onRequestGet({env,request}) {
       stage='identity';
       const about=await (await driveRequest(token.access_token,'about?fields=user(displayName,emailAddress)')).json();
       const name=String(about.user?.displayName || about.user?.emailAddress || 'Google Drive');
+      const email=String(about.user?.emailAddress || '');
       stage='save';
       const previous=await env.DB.prepare('SELECT generation FROM google_connections WHERE guild_id=?').bind(guildId).first();
       if(previous) {
@@ -30,7 +31,7 @@ export async function onRequestGet({env,request}) {
         for(const file of files.results || []) await removeFile(env,file,access.user.id,'drive_reconnected');
       }
       const generation=crypto.randomUUID(),expiry=Date.now()+Number(token.expires_in || 3600)*1000;
-      await env.DB.prepare('INSERT INTO google_connections(guild_id,generation,name,token_json,expires_at,connected_by,connected_at) VALUES (?,?,?,?,?,?,?)').bind(guildId,generation,name,JSON.stringify(await encryptGuildKey(JSON.stringify(token),env.GUILD_SECRETS_KEY)),expiry,access.user.id,Date.now()).run();
+      await env.DB.prepare('INSERT INTO google_connections(guild_id,generation,name,email,token_json,expires_at,connected_by,connected_at) VALUES (?,?,?,?,?,?,?,?)').bind(guildId,generation,name,email,JSON.stringify(await encryptGuildKey(JSON.stringify(token),env.GUILD_SECRETS_KEY)),expiry,access.user.id,Date.now()).run();
       await fileEvent(env,guildId,null,'drive_connected',{actorId:access.user.id,name,generation}); outcome='connected';
     }
   } catch(error) {

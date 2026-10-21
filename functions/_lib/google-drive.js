@@ -3,6 +3,16 @@ import { fileEvent, saveFile, removeFile } from './files.js';
 import { fileExtensions, extension, limitedBytes, validFileId } from '../../shared/files.mjs';
 export const googleConfigured = env => Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GUILD_SECRETS_KEY);
 export const driveScope='https://www.googleapis.com/auth/drive.readonly';
+export async function googleAccountEmail(env,row) {
+  if(row.email)return row.email;
+  try {
+    const token=await googleToken(env,row);
+    const about=await (await driveRequest(token,'about?fields=user(emailAddress)')).json();
+    const email=String(about.user?.emailAddress || '');
+    await env.DB.prepare('UPDATE google_connections SET email=? WHERE guild_id=? AND generation=?').bind(email,row.guild_id,row.generation).run();
+    return email;
+  } catch { return ''; } // An unavailable profile must not block document management.
+}
 export async function googleExchange(env, values) {
   const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,...values}),signal:AbortSignal.timeout(15000)});
   if (!response.ok) throw Object.assign(Error('Google authorization failed. Reconnect Google Drive and check the application setup.'),{status:response.status});

@@ -1,5 +1,23 @@
 let fileGuild='',fileSavedChannels=[],fileChannelsSelected=new Set(),fileChannelsList=[],fileFolders=[],fileSavedFolders=[],fileFolderStack=[{id:'root',name:'My Drive'}],fileBusy=false,fileLoad=0,fileConfigured=false;
 const fileEqual=(a,b)=>JSON.stringify([...a].sort())===JSON.stringify([...b].sort());
+function setKnowledgeLock(locked) {
+  const group=$('#knowledge-tab');
+  group.disabled=locked;group.classList.toggle('locked',locked);
+  group.querySelector('.lock-icon').hidden=!locked;
+  group.querySelector('.subtab-copy small').textContent=locked?'Add an AI key first':'Discord, Patreon & files';
+  for(const id of ['knowledge-discord-tab','knowledge-patreon-tab','knowledge-files-tab']) {
+    const button=$('#'+id);button.disabled=locked;button.classList.toggle('locked',locked);
+    if(locked)button.hidden=true;
+  }
+  if(locked)group.setAttribute('aria-expanded','false');
+}
+function updateFileUploadSelection() {
+  const files=$('#file-upload-input').files;
+  $('#file-upload-label').textContent=!files.length?'Choose files':files.length===1?files[0].name:`${files.length} files selected`;
+  $('#file-upload-clear').hidden=!files.length;
+  $('#file-upload-clear').disabled=fileBusy;
+  $('#file-upload-save').disabled=!fileConfigured || !files.length || fileBusy;
+}
 function closeFileChannelMenu(){const list=$('#file-channel-options');list.hidden=true;$('#file-channel-trigger').setAttribute('aria-expanded','false');$('#file-channel-trigger').classList.remove('open');}
 function fileSelectionButtons(){
   $('#file-channel-label').textContent=fileChannelsSelected.size?`${fileChannelsSelected.size} channels selected`:'All bot response channels';
@@ -71,10 +89,10 @@ async function loadFiles(){
   $('#file-google-connect').hidden=data.google.connected;$('#file-google-connect').disabled=!data.googleConfigured || fileBusy;
   $('#file-upload-setup').hidden=data.configured;
   $('#file-upload-input').disabled=!data.configured;
-  $('#file-upload-save').disabled=!data.configured || !$('#file-upload-input').files.length || fileBusy;
+  updateFileUploadSelection();
   $('#file-google-setup').hidden=data.googleConfigured && data.configured;
   $('#file-google-connected').hidden=!data.google.connected;
-  $('#file-google-name').textContent=data.google.name || '';
+  $('#file-google-name').textContent=(data.google.name || '')+(data.google.email?` (${data.google.email})`:'');
   $('#file-google-sync-status').textContent=data.google.sync?.warning || (data.google.sync?.scan?'Google Drive scan in progress.':data.google.sync?.checkedAt?`Last scan: ${new Date(data.google.sync.checkedAt).toLocaleString()}`:'Choose folders to begin syncing.');
   $('#file-events-download').href=`/api/guild/${guildId}/files?download=events`;
   renderFileList(data);
@@ -94,6 +112,7 @@ function setupFiles(){
   const subtab=document.createElement('button');subtab.className='subtab side-subtab knowledge-source-subtab';subtab.id='knowledge-files-tab';subtab.dataset.tab='files';subtab.textContent='Files & Google Drive';subtab.hidden=true;
   $('#knowledge-patreon-tab').after(subtab);$('#knowledge-tab').setAttribute('aria-controls','knowledge-discord-tab knowledge-patreon-tab knowledge-files-tab');
   $('#knowledge-tab .subtab-copy small').textContent='Discord, Patreon & files';
+  setKnowledgeLock(true);
   subtab.onclick=()=>showTab('files');
   $('#file-channel-trigger').onclick=()=>{const open=$('#file-channel-options').hidden;closeFileChannelMenu();$('#file-channel-options').hidden=!open;$('#file-channel-trigger').classList.toggle('open',open);$('#file-channel-trigger').setAttribute('aria-expanded',String(open));};
   document.addEventListener('click',event=>{if(!event.target.closest('#file-channel-select'))closeFileChannelMenu();});
@@ -113,13 +132,14 @@ function setupFiles(){
     fileFolders.push({id,name:`Folder ${id.slice(0,12)}…`});$('#file-folder-url').value='';fileFolderSelection();
   };
   $('#file-folder-save').onclick=()=>fileAction('folders',{folderIds:fileFolders.map(f=>f.id)});
-  $('#file-upload-input').onchange=()=>{const files=$('#file-upload-input').files;$('#file-upload-label').textContent=!files.length?'Choose files':files.length===1?files[0].name:`${files.length} files selected`;$('#file-upload-save').disabled=!fileConfigured || !files.length;};
+  $('#file-upload-input').onchange=updateFileUploadSelection;
+  $('#file-upload-clear').onclick=event=>{event.preventDefault();event.stopPropagation();if(fileBusy)return;$('#file-upload-input').value='';updateFileUploadSelection();};
   $('#file-upload-form').onsubmit=async event=>{event.preventDefault();const guildId=selected,files=[...$('#file-upload-input').files];if(!guildId || !files.length || fileBusy)return;
-    fileBusy=true;$('#file-upload-save').disabled=true;
+    fileBusy=true;updateFileUploadSelection();$('#file-upload-input').disabled=true;
     try{for(const file of files){const form=new FormData();form.append('file',file);form.append('description',$('#file-upload-description').value);
       const response=await fetch(`/api/guild/${guildId}/files`,{method:'POST',body:form});const data=await response.json();if(!response.ok)throw Error(`${file.name}: ${data.error || 'Upload failed.'}`);}
       if(guildId===selected){$('#file-upload-form').reset();toast(`${files.length} file${files.length===1?'':'s'} uploaded. Indexing will begin shortly.`);}
-    }catch(error){toast(error.message);}finally{fileBusy=false;$('#file-upload-save').disabled=!fileConfigured || !$('#file-upload-input').files.length;await loadFiles().catch(()=>{});}
+    }catch(error){toast(error.message);}finally{fileBusy=false;$('#file-upload-input').disabled=!fileConfigured;updateFileUploadSelection();await loadFiles().catch(()=>{});}
   };
   setInterval(()=>{if(!document.hidden && $('#files').classList.contains('active') && !$('#workspace').hidden)loadFiles().catch(()=>{});},15000);
 }

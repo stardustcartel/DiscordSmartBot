@@ -16,6 +16,11 @@ export async function filesSchema(db) {
     db.prepare(`CREATE TABLE IF NOT EXISTS google_connections (guild_id TEXT PRIMARY KEY, generation TEXT NOT NULL, name TEXT NOT NULL, token_json TEXT NOT NULL, expires_at INTEGER NOT NULL, refresh_until INTEGER NOT NULL DEFAULT 0, folders_json TEXT NOT NULL DEFAULT '[]', sync_json TEXT NOT NULL DEFAULT '{}', connected_by TEXT NOT NULL, connected_at INTEGER NOT NULL)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS google_oauth (nonce TEXT PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`),
   ]);
+  const columns=await db.prepare('PRAGMA table_info(google_connections)').all();
+  if(!columns.results.some(column=>column.name==='email')) {
+    try { await db.prepare("ALTER TABLE google_connections ADD COLUMN email TEXT NOT NULL DEFAULT ''").run(); }
+    catch(error) { if(!/duplicate column/i.test(error.message))throw error; }
+  }
 }
 export const sha256 = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(x => x.toString(16).padStart(2,'0')).join('');
 export async function fileEvent(env, guildId, fileId, event, detail = {}) {
