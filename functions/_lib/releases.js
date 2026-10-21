@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.5.1", at: "2026-10-21T23:38:58Z", historical: false, changes: [
+    "Replaced the homepage word cloud with the updated artwork."
+  ] },
   { version: "2.5.0", at: "2026-10-21T22:30:21Z", historical: false, changes: [
     "Forum follow-ups now include recent messages from participants and the bot, keeping the latest comment central while preserving the original discussion.",
     "The bot can reuse verified research for additional examples and search for missing details or new questions. Earlier bot answers provide context, not evidence; current knowledge and citation settings still apply.",
