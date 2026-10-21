@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.4.5", at: "2026-10-21T21:48:40Z", historical: false, changes: [
+    "Simplified document cards by hiding internal checksums, storage paths, and revision identifiers while preserving diagnostic tracking.",
+    "Renamed the Google Drive parent-folder navigation button to Back."
+  ] },
   { version: "2.4.4", at: "2026-10-21T21:25:00Z", historical: false, changes: [
     "Polished Google Drive folder browsing with matching scrollbars, clearer selection states, and improved spacing around folder and disconnect controls.",
     "Add folder now checks Google Drive access and shows inline errors for invalid links. Selected folders have Remove buttons; save to apply selection changes without deleting anything from Drive."

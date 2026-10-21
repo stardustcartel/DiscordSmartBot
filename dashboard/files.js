@@ -104,9 +104,8 @@ function renderFileList(data){
   for(const file of data.files){
     const article=document.createElement('article'),title=document.createElement('h4'),status=document.createElement('small');
     title.textContent=`${file.name} · ${file.kind==='google'?'Google Drive':'Uploaded'}`;
-    status.textContent=`${file.state} · ${(file.size/1024).toFixed(1)} KB · saved ${new Date(file.createdAt).toLocaleString()} · SHA-256 ${file.sha256}`;
+    status.textContent=`${file.state} · ${(file.size/1024).toFixed(1)} KB · saved ${new Date(file.createdAt).toLocaleString()}`;
     article.append(title,status);
-    const location=document.createElement('p');location.className='field-help';location.textContent=`Storage: ${file.objectKey} · revision ${file.revision}${file.status?.localPath?' · Bot copy: '+file.status.localPath:''}`;article.append(location);
     if(file.status?.warning){const warning=document.createElement('p');warning.className='field-help';warning.textContent=file.status.warning;article.append(warning);}
     const desc=document.createElement('textarea');desc.maxLength=2000;desc.value=file.description || '';desc.setAttribute('aria-label',`Description for ${file.name}`);article.append(desc);
     const actions=document.createElement('div');actions.className='file-actions';
