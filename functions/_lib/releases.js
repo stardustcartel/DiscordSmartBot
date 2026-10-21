@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.4.4", at: "2026-10-21T21:25:00Z", historical: false, changes: [
+    "Polished Google Drive folder browsing with matching scrollbars, clearer selection states, and improved spacing around folder and disconnect controls.",
+    "Add folder now checks Google Drive access and shows inline errors for invalid links. Selected folders have Remove buttons; save to apply selection changes without deleting anything from Drive."
+  ] },
   { version: "2.4.3", at: "2026-10-21T19:47:00Z", historical: false, changes: [
     "File and Google Drive citations now use a single moderator-added document notice instead of document names or Drive links; Discord and Patreon citations remain available.",
     "Refreshed Files & Google Drive buttons, combined visibility and indexing into one card, added a clear-files control and Google Drive logo, and show the connected account's email.",

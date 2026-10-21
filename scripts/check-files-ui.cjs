@@ -11,6 +11,17 @@ const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   if (pathname.startsWith('/api/')) {
     res.setHeader('Content-Type', 'application/json');
+    if(req.method==='POST') {
+      let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{
+        const action=JSON.parse(body);
+        if(action.action==='validateFolder') {
+          if(action.folderId==='missing'){res.statusCode=404;return res.end(JSON.stringify({error:'This folder could not be read.'}));}
+          return res.end(JSON.stringify({folder:{id:action.folderId,name:'Verified shared folder'}}));
+        }
+        if(action.action==='folders') {fixture.google.folders=action.folderIds.map(id=>({id,name:'Verified shared folder'}));return res.end(JSON.stringify({folders:fixture.google.folders}));}
+        res.end(JSON.stringify({folders:Array.from({length:12},(_,i)=>({id:`folder${i}`,name:`Example folder ${i}`}))}));
+      });return;
+    }
     const data = pathname === '/api/me' ? { user: null } : pathname.endsWith('/knowledge') ? { channels: [{ id: '1', name: 'Forum', type: 15 }, { id: '2', name: 'General', type: 0 }] } : req.method === 'POST' ? { folders: [{ id: 'folder', name: 'Example folder' }] } : fixture;
     return res.end(JSON.stringify(data));
   }
@@ -57,9 +68,42 @@ const server = http.createServer((req, res) => {
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: 'Delete document', exact: true }).isVisible(), true);
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    for (const selector of ['#file-google-sync', '#file-google-reconnect', '#file-google-disconnect', '#file-folder-add']) {
+    for (const selector of ['#file-google-sync', '#file-google-reconnect', '#file-google-disconnect']) {
       assert.match(await page.locator(selector).evaluate(el => getComputedStyle(el).backgroundImage), /linear-gradient/);
     }
+    await page.locator('#file-google-disconnect').click();
+    const cancelBounds=await page.locator('#file-google-cancel').boundingBox(),removeBounds=await page.locator('#file-google-confirm-delete').boundingBox();
+    assert.ok(removeBounds.x>=cancelBounds.x+cancelBounds.width+9,'disconnect buttons have a gap');
+    await page.locator('#file-google-cancel').click();
+    assert.equal(await page.locator('#file-folder-list').evaluate(el=>getComputedStyle(el).scrollbarWidth),'thin');
+    assert.ok(await page.locator('#file-folder-list').evaluate(el=>el.scrollHeight>el.clientHeight),'fixture exercises scrolling');
+    assert.equal(await page.locator('#file-folder-add').isDisabled(),true);
+    await page.locator('#file-folder-url').fill('https://example.com/folders/invalid');
+    await page.locator('#file-folder-add').click();
+    assert.equal(await page.locator('#file-folder-error').isVisible(),true);
+    assert.equal(await page.locator('#file-selected-folders button').count(),0);
+    await page.locator('#file-folder-url').fill('https://drive.google.com/drive/folders/missing');
+    await page.locator('#file-folder-add').click();
+    await page.waitForFunction(()=>document.querySelector('#file-folder-error').textContent.includes('could not be read'));
+    assert.equal(await page.locator('#file-selected-folders button').count(),0);
+    await page.locator('#file-folder-url').fill('https://drive.google.com/drive/u/0/folders/shared?usp=sharing');
+    await page.locator('#file-folder-add').click();
+    await page.getByRole('button',{name:'Remove Verified shared folder',exact:true}).waitFor();
+    assert.equal(await page.locator('#file-folder-add').isDisabled(),true);
+    await page.locator('#file-folder-save').click();
+    await page.waitForFunction(()=>document.querySelector('#file-folder-save').disabled);
+    await page.getByRole('button',{name:'Remove Verified shared folder',exact:true}).click();
+    assert.equal(await page.locator('#file-folder-save').isDisabled(),false);
+    await page.locator('#file-folder-save').click();
+    await page.waitForFunction(()=>document.querySelector('#file-folder-save').disabled);
+    assert.equal(fixture.google.folders.length,0,'removal persists when saved');
+    await page.locator('#file-folder-list [data-folder-id="folder0"]').click();
+    await page.getByRole('button',{name:'Remove Example folder 0',exact:true}).click();
+    assert.equal(await page.locator('#file-folder-list [data-folder-id="folder0"]').getAttribute('aria-selected'),'false');
+    await page.getByRole('button',{name:'Open Example folder 0',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('#file-folder-up').disabled);
+    await page.locator('#file-folder-up').click();
+    await page.waitForFunction(()=>document.querySelector('#file-folder-up').disabled);
     await page.screenshot({ path: path.join(require('node:os').tmpdir(), 'smartbot-files-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile page must not overflow');

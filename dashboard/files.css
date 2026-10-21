@@ -4,10 +4,24 @@
 #files .file-knowledge-card textarea{width:100%;min-height:88px}
 #files .file-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
 #file-channel-options{position:static;margin-top:8px;max-height:260px;width:100%}
-#file-folder-list{border:1px solid #9e8df044;border-radius:12px;max-height:250px;overflow:auto;padding:8px}
+#file-folder-list{border:1px solid #6d688d;border-radius:12px;background:#151524;box-shadow:0 10px 24px #0003;max-height:250px;overflow:auto;padding:8px;scrollbar-width:thin;scrollbar-color:#5e5978 transparent}
+#file-folder-list::-webkit-scrollbar{width:7px;height:7px}
+#file-folder-list::-webkit-scrollbar-track{background:transparent}
+#file-folder-list::-webkit-scrollbar-thumb{min-height:34px;border:2px solid #151524;border-radius:999px;background:#5e5978}
+#file-folder-list::-webkit-scrollbar-thumb:hover{background:#8178aa}
+#file-folder-list::-webkit-scrollbar-button{display:none;width:0;height:0}
+#file-folder-list::-webkit-scrollbar-corner{background:transparent}
 #file-folder-list button{display:block;width:100%;text-align:left;margin:4px 0}
 #file-folder-list .select-option{flex:1;min-width:160px}
 #file-folder-list .file-actions button:last-child{width:auto}
+#file-folder-list .select-option{border-radius:8px;white-space:normal;overflow-wrap:anywhere;text-align:left}
+#file-folder-list .select-option[aria-selected=true]{background:#34315b;color:#e7e2ff}
+#files label[for=file-folder-url]{margin-top:24px}
+#files .file-error-banner{padding:12px 14px;border:1px solid #b55a7a;border-radius:10px;background:#402438;color:#ffcedd;font-size:13px;line-height:1.5}
+#files #file-folder-url[aria-invalid=true]{border-color:#d77c9d}
+#files .file-selected-folder{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:8px 0;border:1px solid #9e8df044;border-radius:10px;background:#1b1b30}
+#files .file-selected-folder span{min-width:0;overflow-wrap:anywhere;font-size:13px}
+#files .file-selected-folder button{flex-shrink:0}
 #file-list article{padding:16px 0;border-top:1px solid #9e8df044;overflow-wrap:anywhere}
 #file-list article h4{margin:0 0 4px}
 #file-list article small{color:#aaa8bd}

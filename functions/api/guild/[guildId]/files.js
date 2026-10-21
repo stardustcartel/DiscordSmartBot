@@ -64,6 +64,15 @@ export async function onRequestPost({env,request,params}) {
       const data=await (await driveRequest(token,'files?'+query)).json();
       return json({folders:(data.files || []).map(f=>({id:f.id,name:f.name})),more:Boolean(data.nextPageToken)},200,noStore);
     }
+    if(body.action==='validateFolder') {
+      if(!validFileId(body.folderId))throw Error('Enter a valid Google Drive folder ID.');
+      const row=await env.DB.prepare('SELECT * FROM google_connections WHERE guild_id=?').bind(guildId).first();if(!row)throw Error('Connect Google Drive first.');
+      const folder=await driveFile(await googleToken(env,row),body.folderId);
+      if(folder.trashed || folder.mimeType!=='application/vnd.google-apps.folder')throw Error('This link is not an available Google Drive folder. Choose a folder rather than an individual file.');
+      const current=await env.DB.prepare('SELECT generation FROM google_connections WHERE guild_id=?').bind(guildId).first();
+      if(current?.generation!==row.generation)throw Error('The connected Google account changed. Try adding this folder again.');
+      return json({folder:{id:folder.id,name:folder.name}},200,noStore);
+    }
     if(body.action==='folders') {
       const row=await env.DB.prepare('SELECT * FROM google_connections WHERE guild_id=?').bind(guildId).first(); if(!row) throw Error('Connect Google Drive first.');
       const ids=body.folderIds;

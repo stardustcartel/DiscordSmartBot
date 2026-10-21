@@ -1,5 +1,37 @@
 let fileGuild='',fileSavedChannels=[],fileChannelsSelected=new Set(),fileChannelsList=[],fileFolders=[],fileSavedFolders=[],fileFolderStack=[{id:'root',name:'My Drive'}],fileBusy=false,fileLoad=0,fileConfigured=false;
 const fileEqual=(a,b)=>JSON.stringify([...a].sort())===JSON.stringify([...b].sort());
+let fileFolderValidating=false,fileFolderRequest=0;
+function fileFolderError(message='') {
+  $('#file-folder-error').textContent=message;$('#file-folder-error').hidden=!message;
+  $('#file-folder-url').setAttribute('aria-invalid',String(Boolean(message)));
+}
+function fileFolderInputState() {
+  $('#file-folder-add').disabled=fileBusy || fileFolderValidating || !$('#file-folder-url').value.trim();
+  $('#file-folder-add').textContent=fileFolderValidating?'Checking folder…':'Add folder';
+  $('#file-folder-url').disabled=fileFolderValidating;
+}
+async function addFileFolder() {
+  const value=$('#file-folder-url').value.trim(),guildId=selected;
+  if(!value || !guildId || fileBusy || fileFolderValidating)return;
+  fileFolderError();let id=value;
+  try {
+    if(!/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
+      const url=new URL(value);
+      if(url.protocol!=='https:' || !['drive.google.com','docs.google.com'].includes(url.hostname) || url.username || url.password || url.port)throw Error();
+      id=url.pathname.match(/^\/(?:drive\/(?:u\/\d+\/)?)?folders\/([A-Za-z0-9_-]{1,100})\/?$/)?.[1];
+      if(!id)throw Error();
+    }
+  } catch {fileFolderError('Enter a valid Google Drive folder link or folder ID. Links to individual files or other websites cannot be added.');return;}
+  if(fileFolders.some(f=>f.id===id)){fileFolderError('This folder is already selected.');return;}
+  if(fileFolders.length>=10){fileFolderError('Choose up to 10 folders. Remove a selected folder before adding another.');return;}
+  const request=++fileFolderRequest;fileFolderValidating=true;fileFolderInputState();fileFolderSelection();
+  try {
+    const result=await api(`/api/guild/${guildId}/files`,{method:'POST',body:JSON.stringify({action:'validateFolder',folderId:id})});
+    if(request!==fileFolderRequest || guildId!==selected)return;
+    fileFolders.push(result.folder);$('#file-folder-url').value='';
+  } catch(error) {if(request===fileFolderRequest && guildId===selected)fileFolderError(error.message || 'This folder could not be verified. Check the link and connected account’s access.');}
+  finally {if(request===fileFolderRequest){fileFolderValidating=false;fileFolderInputState();fileFolderSelection();}}
+}
 function setKnowledgeLock(locked) {
   const group=$('#knowledge-tab');
   group.disabled=locked;group.classList.toggle('locked',locked);
@@ -28,8 +60,21 @@ function fileSelectionButtons(){
   $('#file-channel-save').disabled=fileBusy || fileGuild!==selected || fileEqual([...fileChannelsSelected],fileSavedChannels);
 }
 function fileFolderSelection(){
-  $('#file-folder-selection').textContent=fileFolders.length?`${fileFolders.length} folder${fileFolders.length===1?'':'s'} selected: ${fileFolders.map(f=>f.name).join(', ')}`:'No folders selected';
-  $('#file-folder-save').disabled=fileBusy || fileGuild!==selected || JSON.stringify(fileFolders.map(f=>f.id).sort())===JSON.stringify(fileSavedFolders.map(f=>f.id).sort());
+  $('#file-folder-selection').textContent=fileFolders.length?`${fileFolders.length} folder${fileFolders.length===1?'':'s'} selected`:'No folders selected';
+  const list=$('#file-selected-folders');list.replaceChildren();
+  for(const folder of fileFolders) {
+    const row=document.createElement('div');row.className='file-selected-folder';
+    const name=document.createElement('span');name.textContent=folder.name;
+    const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.setAttribute('aria-label',`Remove ${folder.name}`);remove.disabled=fileBusy || fileFolderValidating;
+    remove.onclick=()=>{if(fileBusy || fileFolderValidating)return;fileFolders=fileFolders.filter(f=>f.id!==folder.id);fileFolderError();fileFolderSelection();};
+    row.append(name,remove);list.append(row);
+  }
+  document.querySelectorAll('#file-folder-list [data-folder-id]').forEach(button=>{
+    const chosen=fileFolders.some(f=>f.id===button.dataset.folderId);button.setAttribute('aria-selected',String(chosen));
+    button.textContent=`${chosen?'✓ ':'  '}${button.dataset.folderName}`;button.disabled=fileBusy || fileFolderValidating;
+  });
+  $('#file-folder-save').disabled=fileBusy || fileFolderValidating || fileGuild!==selected || JSON.stringify(fileFolders.map(f=>f.id).sort())===JSON.stringify(fileSavedFolders.map(f=>f.id).sort());
+  fileFolderInputState();
 }
 async function browseFilesFolder(){
   const guildId=selected,parent=fileFolderStack.at(-1);if(!guildId)return;
@@ -40,14 +85,16 @@ async function browseFilesFolder(){
   for(const folder of data.folders){
     const row=document.createElement('div');row.className='file-actions';
     const choose=document.createElement('button');choose.type='button';choose.className='select-option';choose.setAttribute('role','option');
+    choose.dataset.folderId=folder.id;choose.dataset.folderName=folder.name;
     choose.textContent=`${fileFolders.some(f=>f.id===folder.id)?'✓ ':'  '} ${folder.name}`;
-    choose.onclick=()=>{if(fileFolders.some(f=>f.id===folder.id))fileFolders=fileFolders.filter(f=>f.id!==folder.id);else if(fileFolders.length<10)fileFolders.push(folder);else {toast('Choose up to 10 folders.');return;}fileFolderSelection();choose.textContent=`${fileFolders.some(f=>f.id===folder.id)?'✓ ':'  '} ${folder.name}`;};
+    choose.onclick=()=>{if(fileBusy || fileFolderValidating)return;if(fileFolders.some(f=>f.id===folder.id))fileFolders=fileFolders.filter(f=>f.id!==folder.id);else if(fileFolders.length<10)fileFolders.push(folder);else {fileFolderError('Choose up to 10 folders. Remove a selected folder before adding another.');return;}fileFolderError();fileFolderSelection();};
     const open=document.createElement('button');open.type='button';open.textContent='Open';open.setAttribute('aria-label',`Open ${folder.name}`);open.onclick=()=>{fileFolderStack.push(folder);browseFilesFolder().catch(e=>toast(e.message));};
     row.append(choose,open);list.append(row);
   }
   if(!data.folders.length)list.textContent='No folders here.';
   if(data.more){const hint=document.createElement('p');hint.className='field-help';hint.textContent='Showing the first 100 folders. Narrow your selection by opening a folder.';list.append(hint);}
   $('#file-folder-up').disabled=fileFolderStack.length<=1;
+  fileFolderSelection();
 }
 function renderFileList(data){
   const list=$('#file-list');list.replaceChildren();
@@ -82,7 +129,7 @@ async function loadFiles(){
   if(guildId!==selected || request!==fileLoad)return;
   const changed=fileGuild!==guildId;fileGuild=guildId;
   fileConfigured=data.configured;
-  if(changed){fileChannelsSelected=new Set(data.channelIds);fileFolders=[...(data.google.folders||[])];fileFolderStack=[{id:'root',name:'My Drive'}];closeFileChannelMenu();}
+  if(changed){fileChannelsSelected=new Set(data.channelIds);fileFolders=[...(data.google.folders||[])];fileFolderStack=[{id:'root',name:'My Drive'}];closeFileChannelMenu();fileFolderRequest++;fileFolderValidating=false;$('#file-folder-url').value='';fileFolderError();}
   fileSavedChannels=data.channelIds;fileSavedFolders=data.google.folders || [];
   fileChannelsList=channels;for(const id of fileChannelsSelected)if(!fileChannelsList.some(c=>c.id===id))fileChannelsList.push({id,name:'Unavailable channel'});
   fileSelectionButtons();fileFolderSelection();
@@ -99,14 +146,14 @@ async function loadFiles(){
   if(data.google.connected && changed)browseFilesFolder().catch(e=>toast(e.message));
 }
 async function fileAction(action,extra={}){
-  if(fileBusy || !selected)return;const guildId=selected;fileBusy=true;
+  if(fileBusy || fileFolderValidating || !selected)return;const guildId=selected;fileBusy=true;fileFolderSelection();
   try{const result=await api(`/api/guild/${guildId}/files`,{method:'POST',body:JSON.stringify({action,...extra})});if(guildId!==selected)return;
     if(action==='connect'){location.assign(result.url);return;}
     if(action==='visibility')closeFileChannelMenu();
     if(action==='folders'){fileFolders=result.folders || fileFolders;fileFolderSelection();}
-    if(action==='disconnect'){$('#file-google-confirm').hidden=true;fileFolderStack=[{id:'root',name:'My Drive'}];}
+    if(action==='disconnect'){$('#file-google-confirm').hidden=true;fileFolderStack=[{id:'root',name:'My Drive'}];fileFolders=[];fileSavedFolders=[];fileFolderError();}
     toast(action==='sync'?'Google Drive sync requested.':action==='delete'?'Document deleted.':action==='folders'?'Google Drive folders saved.':'Saved.');
-  }catch(error){toast(error.message);}finally{fileBusy=false;await loadFiles().catch(()=>{});}
+  }catch(error){if(action==='folders')fileFolderError(error.message);toast(error.message);}finally{fileBusy=false;fileFolderSelection();await loadFiles().catch(()=>{});}
 }
 function setupFiles(){
   const subtab=document.createElement('button');subtab.className='subtab side-subtab knowledge-source-subtab';subtab.id='knowledge-files-tab';subtab.dataset.tab='files';subtab.textContent='Files & Google Drive';subtab.hidden=true;
@@ -124,13 +171,10 @@ function setupFiles(){
   $('#file-google-cancel').onclick=()=>{$('#file-google-confirm').hidden=true;};
   $('#file-google-confirm-delete').onclick=()=>fileAction('disconnect');
   $('#file-folder-up').onclick=()=>{if(fileFolderStack.length>1)fileFolderStack.pop();browseFilesFolder().catch(e=>toast(e.message));};
-  $('#file-folder-add').onclick=()=>{const value=$('#file-folder-url').value.trim();let id=value;
-    try{if(value.startsWith('https://')){const url=new URL(value);if(!['drive.google.com','docs.google.com'].includes(url.hostname))throw Error();id=url.pathname.match(/\/folders\/([A-Za-z0-9_-]+)/)?.[1] || '';}if(!/^[A-Za-z0-9_-]{1,100}$/.test(id))throw Error();}
-    catch{toast('Paste a Google Drive folder link or ID.');return;}
-    if(fileFolders.some(f=>f.id===id))return;
-    if(fileFolders.length>=10){toast('Choose up to 10 folders.');return;}
-    fileFolders.push({id,name:`Folder ${id.slice(0,12)}…`});$('#file-folder-url').value='';fileFolderSelection();
-  };
+  $('#file-folder-add').onclick=addFileFolder;
+  $('#file-folder-url').oninput=()=>{fileFolderError();fileFolderInputState();};
+  $('#file-folder-url').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();addFileFolder();}};
+  fileFolderInputState();
   $('#file-folder-save').onclick=()=>fileAction('folders',{folderIds:fileFolders.map(f=>f.id)});
   $('#file-upload-input').onchange=updateFileUploadSelection;
   $('#file-upload-clear').onclick=event=>{event.preventDefault();event.stopPropagation();if(fileBusy)return;$('#file-upload-input').value='';updateFileUploadSelection();};

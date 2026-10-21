@@ -10,6 +10,8 @@ import {syncDrive,googleAccountEmail} from '../functions/_lib/google-drive.js';
 import {cite} from '../src/knowledge-retrieval.js';
 import {encryptGuildKey} from '../functions/_lib/gemini-secret.js';
 import {onRequestPost as internalFiles} from '../functions/api/internal/files/[guildId].js';
+import {onRequestPost as dashboardFiles} from '../functions/api/guild/[guildId]/files.js';
+import {seal} from '../functions/_lib/auth.js';
 import {FilesKnowledge,sections} from '../src/files-knowledge.js';
 const database=new DatabaseSync(':memory:');
 const db={prepare(sql){return {bind(...values){const statement=database.prepare(sql);return {run:async()=>({meta:statement.run(...values)}),first:async()=>statement.get(...values),all:async()=>({results:statement.all(...values)})};},run:async()=>({meta:database.prepare(sql).run()}),first:async()=>database.prepare(sql).get(),all:async()=>({results:database.prepare(sql).all()})};},async batch(statements){for(const statement of statements)await statement.run();}};
@@ -40,6 +42,25 @@ const tokenKey=Buffer.alloc(32,7).toString('base64');env.GUILD_SECRETS_KEY=token
 const testToken={access_token:'test-only',refresh_token:'test-refresh',expires_in:3600};
 await db.prepare('INSERT INTO google_connections(guild_id,generation,name,token_json,expires_at,folders_json,connected_by,connected_at) VALUES (?,?,?,?,?,?,?,?)').bind(b,'gen-test','Test Google',JSON.stringify(await encryptGuildKey(JSON.stringify(testToken),tokenKey)),Date.now()+3600000,JSON.stringify([{id:'folder-test',name:'Q&A'}]),'user',Date.now()).run();
 const originalFetch=globalThis.fetch;
+env.DASHBOARD_SESSION_SECRET='fixture-session-secret';env.DISCORD_BOT_TOKEN='fixture-bot-token';
+const owner='1079143480988799046';
+const session=await seal({user:{id:owner},guilds:[{id:b}],expiresAt:Date.now()+60000},env.DASHBOARD_SESSION_SECRET);
+const folderRequest=(folderId,authenticated=true)=>new Request('https://example.test/api/guild/'+b+'/files',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json',...(authenticated?{Cookie:'dashboard_session='+session}:{})},body:JSON.stringify({action:'validateFolder',folderId})});
+globalThis.fetch=async input=>{
+  const url=new URL(input);
+  if(url.hostname==='discord.com')return Response.json(url.pathname.endsWith('/roles')?[]:url.pathname.includes('/members/')?{roles:[]}:{owner_id:owner});
+  const id=url.pathname.split('/').at(-1);
+  if(id==='missing')return Response.json({error:'Not found'},{status:404});
+  return Response.json({id,name:'Q&A folder',mimeType:id==='file'?'text/plain':'application/vnd.google-apps.folder',trashed:id==='trashed'});
+};
+try {
+  const call=(id,auth=true)=>dashboardFiles({env,request:folderRequest(id,auth),params:{guildId:b}});
+  assert.equal((await call('folder',false)).status,403);
+  for(const id of ['file','trashed','bad/id'])assert.equal((await call(id)).status,400);
+  assert.equal((await call('missing')).status,404);
+  assert.deepEqual(await (await call('folder')).json(),{folder:{id:'folder',name:'Q&A folder'}});
+  assert.deepEqual(JSON.parse((await db.prepare('SELECT folders_json FROM google_connections WHERE guild_id=?').bind(b).first()).folders_json),[{id:'folder-test',name:'Q&A'}],'validation must not commit a folder selection');
+} finally {globalThis.fetch=originalFetch;}
 let identityReads=0;
 globalThis.fetch=async()=>{identityReads++;return Response.json({user:{emailAddress:'test@example.test'}});};
 try {
