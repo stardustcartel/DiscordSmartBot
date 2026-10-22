@@ -25,7 +25,7 @@ planFormat.schema.properties.followup = { type:'object',additionalProperties:fal
 planFormat.schema.required.push('followup');
 const parse = (text) => JSON.parse(String(text).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
 const canonical = (text) => String(text).toLowerCase().replace(/<@!?\d+>/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-const details = (results) => results.map(({ message: m, score }) => ({ groupId: m.id, messageId: m.id, memberIds: m.memberIds || [m.id], channelId: m.channelId, channelName: m.channelName, url: m.url, score, contentPreview: m.content.slice(0, 500) }));
+const details = (results) => results.map(({ message: m, score }) => ({ groupId: m.id, messageId: m.id, memberIds: m.memberIds || [m.id], sourceTypes: [...new Set((m.members || [m]).map(part => part.sourceType || 'discord'))], channelId: m.channelId, channelName: m.channelName, url: m.url, score, contentPreview: m.content.slice(0, 500) }));
 const membersOf = (group) => group.members || [group];
 // Budget entire groups, never only the first message in an explanation.
 function budgetGroups(groups, maxCharacters = 48000, maxMessages = 64) {

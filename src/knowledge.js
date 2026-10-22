@@ -4,6 +4,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { readJson } = require("./storage");
 const { KnowledgeGroups } = require("./knowledge-groups");
 const { AnnouncementEvidence } = require('./knowledge-announcements');
+const { knowledgeText } = require('./knowledge-message');
 
 const stopWords = new Set("the and this that what when where which who how are was were have has had can could would should will with from about please help tell does did for you your our their there they into also some any its not but an my or it to is as of in on at be am me do im ive".split(" "));
 const terms = (text) => [...new Set(String(text).toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])].filter((t) => !stopWords.has(t)).slice(0, 40);
@@ -65,14 +66,21 @@ class KnowledgeBase {
   }
   indexDecision(message) {
     if (!message?.guildId) return { allowed: false, reason: 'not_server_message' };
-    if (message.webhookId || message.system || message.channel?.type === 12) return { allowed: false, reason: 'webhook_system_or_private_thread' };
+    if (message.system || message.channel?.type === 12) return { allowed: false, reason: 'system_or_private_thread' };
     const ids = this.guildSettings.get(message.guildId).knowledgeChannelIds;
     if (!ids.includes(message.channelId) && !ids.includes(message.channel?.parentId)) return { allowed: false, reason: 'channel_not_selected' };
-    if (!message.content?.trim()) return { allowed: false, reason: 'no_text' };
-    if (message.author?.bot) {
-      const announcement = this.announcements.identify(message);
-      return announcement ? { allowed: true, reason: 'verified_youtube_announcement', ...announcement }
-        : { allowed: false, reason: 'bot_message_without_delivery_receipt' };
+    if (!knowledgeText(message)) return { allowed: false, reason: 'no_text' };
+    if (message.author?.bot || message.webhookId) {
+      const selfId = message.client?.user?.id || message.guild?.members?.me?.id || message.channel?.guild?.members?.me?.id;
+      // Do not accidentally admit our AI replies when identity is unavailable.
+      if (!selfId || !message.author?.id) return { allowed: false, reason: 'automated_author_unverified' };
+      if (message.author.id === selfId) {
+        const announcement = this.announcements.identify(message);
+        return announcement ? { allowed: true, reason: 'verified_youtube_announcement', ...announcement }
+          : { allowed: false, reason: 'own_bot_message_without_delivery_receipt' };
+      }
+      return message.webhookId ? { allowed: true, reason: 'integration_message', sourceType: 'discord_webhook' }
+        : { allowed: true, reason: 'external_bot_message', sourceType: 'discord_bot' };
     }
     return { allowed: true, reason: 'human_message', sourceType: 'discord' };
   }
@@ -99,7 +107,7 @@ class KnowledgeBase {
     const firstAnnouncement = decision.sourceType === 'youtube_announcement' && !this.db.prepare('SELECT id FROM messages WHERE id=?').get(message.id);
     this.store({ id: message.id, guildId: message.guildId, channelId: message.channelId,
       rootId: message.channel?.isThread?.() ? message.channel.parentId : message.channelId,
-      channelName: message.channel?.name, authorId: message.author?.id, content: message.content.trim(),
+      channelName: message.channel?.name, authorId: message.author?.id, content: knowledgeText(message),
       createdTimestamp: message.createdTimestamp, editedTimestamp: message.editedTimestamp, pinned: message.pinned, replyToId: message.reference?.messageId || null, sourceType: decision.sourceType });
     if (firstAnnouncement) console.info('Knowledge announcement indexed:', JSON.stringify({ guildId: message.guildId, channelId: message.channelId, messageId: message.id, ...decision }));
     return true;
@@ -153,7 +161,7 @@ class KnowledgeBase {
       AND m.channelId IN (SELECT value FROM json_each(?)) AND m.rootId IN (SELECT value FROM json_each(?))`;
     const totalMatches = this.db.prepare(`SELECT count(*) AS n ${scope}`).get(...args).n;
     const rows = this.db.prepare(`WITH hits AS MATERIALIZED (SELECT m.id,m.guildId,m.channelId,m.rootId,m.channelName,m.authorId,m.content,
-      m.createdTimestamp,m.editedTimestamp,m.url,m.pinned,m.replyToId,bm25(message_search,1.0,0.08) AS rank ${scope}),
+      m.createdTimestamp,m.editedTimestamp,m.url,m.pinned,m.replyToId,m.sourceType,bm25(message_search,1.0,0.08) AS rank ${scope}),
       unique_hits AS (SELECT *, row_number() OVER (PARTITION BY lower(trim(content)),lower(trim(channelName)) ORDER BY rank,id) AS duplicate FROM hits)
       SELECT *, count(*) OVER () AS distinctCount FROM unique_hits WHERE duplicate=1 ORDER BY rank,id LIMIT ? OFFSET ?`).all(...args, limit, offset);
     const distinctMatches = rows[0]?.distinctCount ?? (totalMatches ? this.db.prepare(`SELECT count(*) AS n FROM (SELECT 1 ${scope} GROUP BY lower(trim(m.content)),lower(trim(m.channelName)))`).get(...args).n : 0);

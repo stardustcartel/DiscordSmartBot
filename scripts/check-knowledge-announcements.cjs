@@ -25,7 +25,7 @@ live.set(message.id, message);
 (async () => {
   assert.equal(store.shouldIndex(message), false, 'Bot notification needs delivery evidence');
   store.announcements.record({ guildId, channelId, videoId: 'abcdefghijk', youtubeChannelId: settings.youtubeSubscriptions[0].youtubeChannelId, sentAt: sentAt + 250, method: 'webhook-delivery-receipt' });
-  assert.equal(store.shouldIndex({ ...message, author: { id: 'different-bot', bot: true } }), false);
+  assert.equal(store.indexDecision({ ...message, author: { id: 'different-bot', bot: true } }).sourceType, 'discord_bot', 'Other bots are ordinary attributed records, not verified delivery receipts');
   assert.equal(store.shouldIndex({ ...message, content: 'I think this is the latest video.\nhttps://www.youtube.com/watch?v=abcdefghijk' }), false, 'Ordinary AI answers remain excluded');
   assert.equal(store.shouldIndex({ ...message, guildId: 'other-server' }), false);
   assert.equal(store.checkpoint(`youtube-rescan:${channelId}`), true);
@@ -34,6 +34,8 @@ live.set(message.id, message);
   assert.equal(scan.reasons.verified_youtube_announcement, 1);
   assert.deepEqual(scan.announcementMessageIds, [message.id]);
   assert.equal(store.groups.forMessage(message).members[0].sourceType, 'youtube_announcement');
+  store.upsert({ ...message, embeds: [{ type: 'rich', description: 'Unverified attached claim' }] });
+  assert.equal(store.db.prepare('SELECT content FROM messages WHERE id=?').get(message.id).content, content, 'Delivery receipt covers body only, not added embeds');
   assert.equal(store.shouldIndex({ ...message, id: '100000000000000006' }), false, 'A receipt cannot authorize another message');
   const retrieval = new KnowledgeRetrieval(store, indexer, {});
   const access = { guild, member, bot, destination: { isServerDm: true }, allowedIds: [channelId] };

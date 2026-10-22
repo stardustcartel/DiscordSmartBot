@@ -7,6 +7,7 @@ const { errorDetails } = require("./knowledge-errors");
 const { normalizePolicy, inspectEvidenceReview, evidenceReviewFormat, reviewInstructions } = require("./knowledge-policy");
 const { behaviorSnapshot, normalizeApprovedAnswers, safeResourceUrl } = require("../shared/behavior.mjs");
 const { ThreadResearch } = require('./thread-context');
+const { knowledgeText } = require('./knowledge-message');
 
 function mergeRankings(lists) {
   const merged = new Map();
@@ -99,9 +100,10 @@ class KnowledgeRetrieval {
         if (channel.type === 12 || (access.destination.isServerDm && channel.nsfw) || !canRead(channel, access.member) || !canRead(channel, access.bot) || (!access.destination.isServerDm && !audienceDecision(channel, access.destination, access.verifiedMembers).allowed)) return null;
         if (!refreshMessages) return { ...stored, channelName: channel.name };
         const live = await channel.messages.fetch({ message: stored.id, cache: false, force: true });
-        if (!this.store.shouldIndex(live) || !live.content?.trim()) { this.store.remove(stored); return null; }
+        const decision = this.store.indexDecision(live);
+        if (!decision.allowed) { this.store.remove(stored); return null; }
         this.store.upsert(live);
-        return { ...stored, content: live.content.trim(), channelName: channel.name, editedTimestamp: live.editedTimestamp, pinned: live.pinned, replyToId: live.reference?.messageId || null };
+        return { ...stored, sourceType: decision.sourceType, content: knowledgeText(live), channelName: channel.name, editedTimestamp: live.editedTimestamp, pinned: live.pinned, replyToId: live.reference?.messageId || null };
       } catch (error) { if ([10008, 10003].includes(Number(error.code))) this.store.remove(stored); return null; }
     };
     for (let i = 0; i < messages.length; i += 6) {

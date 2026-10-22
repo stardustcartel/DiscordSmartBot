@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.3", at: "2026-10-22T07:15:18Z", historical: false, changes: [
+    "Broadened Discord knowledge indexing to include other bots and integrations, including rich-embed text, in selected source channels. Older eligible messages are recovered incrementally without rebuilding the database.",
+    "Kept existing permission checks, citations, search budgets, and exclusion of this bot's own AI replies. Added source-origin and indexing diagnostics to help distinguish missing data from unsuccessful searches."
+  ] },
   { version: "2.6.2", at: "2026-10-22T03:35:48Z", historical: false, changes: [
     "Fixed missing YouTube knowledge in server and DM answers: verified announcements from this bot can now be indexed in selected source channels, with historical recovery and existing permission checks.",
     "Added announcement delivery evidence and indexing diagnostics. Answers distinguish Discord announcement times from actual YouTube publication times. AI-generated replies remain excluded from knowledge sources."

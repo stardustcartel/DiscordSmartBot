@@ -1,5 +1,6 @@
 const { canRead } = require("./knowledge-permissions");
 const { embed, modelFor } = require("./knowledge-embeddings");
+const { SOURCE_POLICY_VERSION } = require('./knowledge-message');
 
 class KnowledgeIndexer {
   constructor(store, guildSettings, guildSecrets) {
@@ -50,10 +51,12 @@ class KnowledgeIndexer {
     this.remember(channel, rootId);
     const state = this.store.checkpoint(key);
     this.store.announcements?.importSettings(channel.guildId);
-    if (this.store.checkpoint(`youtube-rescan:${channel.id}`)) {
+    const policyChanged = state.sourcePolicyVersion !== SOURCE_POLICY_VERSION;
+    if (policyChanged || this.store.checkpoint(`youtube-rescan:${channel.id}`)) {
       Object.assign(state, { latest: null, before: null, complete: false });
       this.store.checkpoint(`youtube-rescan:${channel.id}`, false);
     }
+    state.sourcePolicyVersion = SOURCE_POLICY_VERSION;
     const decisions = new Map();
     const consume = (batch) => {
       if (!this.settings.get(channel.guildId).knowledgeChannelIds.includes(rootId)) return false;
@@ -83,12 +86,17 @@ class KnowledgeIndexer {
       state.complete = batch.size < 100;
     }
     state.checkedAt = Date.now();
-    const reasons = {};
-    for (const decision of decisions.values()) reasons[decision.reason] = (reasons[decision.reason] || 0) + 1;
-    state.lastScan = { at: state.checkedAt, fetched: decisions.size, reasons,
+    const reasons = {}, sourceTypes = {};
+    for (const decision of decisions.values()) {
+      reasons[decision.reason] = (reasons[decision.reason] || 0) + 1;
+      if (decision.allowed) sourceTypes[decision.sourceType] = (sourceTypes[decision.sourceType] || 0) + 1;
+    }
+    state.lastScan = { at: state.checkedAt, fetched: decisions.size, reasons, sourceTypes,
+      sourcePolicyVersion: SOURCE_POLICY_VERSION, policyBackfillStarted: policyChanged,
       announcementMessageIds: [...decisions].filter(([,d]) => d.sourceType === 'youtube_announcement').map(([id]) => id),
       historicalImportComplete: state.complete, caughtUp: state.caughtUp !== false };
     this.store.checkpoint(key, state);
+    if (policyChanged) console.info('Knowledge source-policy backfill:', JSON.stringify({ guildId: channel.guildId, channelId: channel.id, ...state.lastScan }));
     return state.lastScan;
   }
   async discover(guild, roots) {
