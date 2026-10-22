@@ -121,6 +121,10 @@ Conversation retrieval expands relevant matches across authors before AI relevan
 
 ## Security and product direction
 
+YouTube announcements from this bot can be indexed in selected Discord source channels. Delivery receipts bind the Discord message, content, server, channel, and video; ordinary AI replies and other bots remain excluded. Older announcements require a recorded delivery time, matching video URL and announcement template. A historical rescan recovers eligible announcements. The timestamp establishes when Discord announced the video, not its exact YouTube publication time.
+
+Knowledge-search traces include `scope.refreshedChannels[].indexing` (fetched counts, inclusion/exclusion reasons, announcement IDs, and backfill state) and `scope.indexedSourceCounts`. The private SQLite `youtube_knowledge_deliveries` table retains receipt provenance, and the service journal records newly indexed announcements. `scripts/probe-knowledge.js` accepts `dm` as its channel argument for a diagnostic using the member's current permissions; it uses AI credits but never posts to Discord. Run `npm run check:knowledge-announcements` for provenance and DM retrieval regression checks.
+
 Server managers can use `/setup api-key` to open a private Discord modal and
 save or replace their server's Gemini API key. The bot does not echo or log the
 key; it encrypts the value with AES-256-GCM in `data/guild-secrets.json`.

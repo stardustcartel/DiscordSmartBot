@@ -49,9 +49,18 @@ class KnowledgeIndexer {
     const rootId = channel.isThread() ? channel.parentId : channel.id;
     this.remember(channel, rootId);
     const state = this.store.checkpoint(key);
+    this.store.announcements?.importSettings(channel.guildId);
+    if (this.store.checkpoint(`youtube-rescan:${channel.id}`)) {
+      Object.assign(state, { latest: null, before: null, complete: false });
+      this.store.checkpoint(`youtube-rescan:${channel.id}`, false);
+    }
+    const decisions = new Map();
     const consume = (batch) => {
       if (!this.settings.get(channel.guildId).knowledgeChannelIds.includes(rootId)) return false;
-      this.store.transaction(() => { for (const message of batch.values()) this.store.upsert(message); });
+      this.store.transaction(() => { for (const message of batch.values()) {
+        decisions.set(message.id, this.store.indexDecision(message));
+        this.store.upsert(message);
+      } });
       return true;
     };
     const latest = await channel.messages.fetch({ limit: 100, cache: false });
@@ -74,7 +83,13 @@ class KnowledgeIndexer {
       state.complete = batch.size < 100;
     }
     state.checkedAt = Date.now();
+    const reasons = {};
+    for (const decision of decisions.values()) reasons[decision.reason] = (reasons[decision.reason] || 0) + 1;
+    state.lastScan = { at: state.checkedAt, fetched: decisions.size, reasons,
+      announcementMessageIds: [...decisions].filter(([,d]) => d.sourceType === 'youtube_announcement').map(([id]) => id),
+      historicalImportComplete: state.complete, caughtUp: state.caughtUp !== false };
     this.store.checkpoint(key, state);
+    return state.lastScan;
   }
   async discover(guild, roots) {
     const active = await guild.channels.fetchActiveThreads();

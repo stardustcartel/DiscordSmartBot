@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.2", at: "2026-10-22T03:35:48Z", historical: false, changes: [
+    "Fixed missing YouTube knowledge in server and DM answers: verified announcements from this bot can now be indexed in selected source channels, with historical recovery and existing permission checks.",
+    "Added announcement delivery evidence and indexing diagnostics. Answers distinguish Discord announcement times from actual YouTube publication times. AI-generated replies remain excluded from knowledge sources."
+  ] },
   { version: "2.6.1", at: "2026-10-22T02:50:06Z", historical: false, changes: [
     "Direct-message answers now show which server they use and the bot's configured server name, with the server-specific bot avatar and server icon where available.",
     "Server selection lists each bot's server name. Answers still use that server's AI, behavior, and knowledge settings."

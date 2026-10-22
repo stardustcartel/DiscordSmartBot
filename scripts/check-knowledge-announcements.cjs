@@ -1,0 +1,52 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { Collection, PermissionsBitField } = require('discord.js');
+const { KnowledgeBase } = require('../src/knowledge');
+const { KnowledgeIndexer } = require('../src/knowledge-indexer');
+const { KnowledgeRetrieval } = require('../src/knowledge-retrieval');
+const { lookupMessages } = require('../src/knowledge-lookup');
+
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'announcement-evidence-'));
+const guildId = '100000000000000001', channelId = '100000000000000002';
+const bot = { id: '100000000000000003' }, member = { id: '100000000000000004' };
+const settings = { knowledgeChannelIds: [channelId], youtubeSubscriptions: [{ destinationChannelId: channelId, youtubeChannelId: 'UC1234567890123456789012', sourceName: 'Example Creator' }] };
+const store = new KnowledgeBase({ dataDirectory: directory }, { get: () => settings });
+const live = new Map();
+const guild = { id: guildId, members: { me: bot } };
+let readable = true;
+const channel = { id: channelId, guildId, guild, name: 'announcements', type: 0, isThread: () => false,
+  permissionsFor: () => new PermissionsBitField(readable ? 66560n : 0n),
+  messages: { fetch: async options => options.message ? live.get(options.message) : new Collection(live) } };
+guild.channels = { fetch: async () => channel };
+const sentAt = Date.now() - 600000;
+const content = '📺 **Example Creator uploaded a new video:**\n**A new episode**\nhttps://www.youtube.com/watch?v=abcdefghijk';
+const message = { id: '100000000000000005', guildId, guild, channelId, channel, author: { ...bot, bot: true }, content, createdTimestamp: sentAt };
+live.set(message.id, message);
+(async () => {
+  assert.equal(store.shouldIndex(message), false, 'Bot notification needs delivery evidence');
+  store.announcements.record({ guildId, channelId, videoId: 'abcdefghijk', youtubeChannelId: settings.youtubeSubscriptions[0].youtubeChannelId, sentAt: sentAt + 250, method: 'webhook-delivery-receipt' });
+  assert.equal(store.shouldIndex({ ...message, author: { id: 'different-bot', bot: true } }), false);
+  assert.equal(store.shouldIndex({ ...message, content: 'I think this is the latest video.\nhttps://www.youtube.com/watch?v=abcdefghijk' }), false, 'Ordinary AI answers remain excluded');
+  assert.equal(store.shouldIndex({ ...message, guildId: 'other-server' }), false);
+  assert.equal(store.checkpoint(`youtube-rescan:${channelId}`), true);
+  const indexer = new KnowledgeIndexer(store, store.guildSettings, {});
+  const scan = await indexer.scan(channel);
+  assert.equal(scan.reasons.verified_youtube_announcement, 1);
+  assert.deepEqual(scan.announcementMessageIds, [message.id]);
+  assert.equal(store.groups.forMessage(message).members[0].sourceType, 'youtube_announcement');
+  assert.equal(store.shouldIndex({ ...message, id: '100000000000000006' }), false, 'A receipt cannot authorize another message');
+  const retrieval = new KnowledgeRetrieval(store, indexer, {});
+  const access = { guild, member, bot, destination: { isServerDm: true }, allowedIds: [channelId] };
+  const trace = {};
+  const result = await lookupMessages({ retrieval, access, guildId, trace, lookup: { mode: 'latest', authorIds: [], channelIds: [], topicQueries: [['example', 'creator']], start: null, end: null, limit: 1 } });
+  assert.equal(result[0].id, message.id, 'Latest-message retrieval finds the verified notification');
+  assert.equal(result[0].sourceType, 'youtube_announcement');
+  readable = false;
+  assert.deepEqual(await retrieval.validate(null, access, result), [], 'Unreadable sources stay private in DMs');
+  readable = true;
+  store.announcements.record({ guildId, channelId, videoId: 'abcdefghijk', youtubeChannelId: settings.youtubeSubscriptions[0].youtubeChannelId, sentAt: sentAt + 350, method: 'saved-delivery-checkpoint' });
+  message.content = message.content.replace('A new episode', 'A fabricated edited title');
+  assert.deepEqual(await retrieval.validate(null, access, result), [], 'Edited receipts cannot authorize arbitrary bot claims');
+  assert.equal(store.db.prepare('SELECT id FROM messages WHERE id=?').get(message.id), undefined);
+  console.log('Announcement provenance, backfill, chronology, trace counts, permissions, bot exclusion and edit invalidation passed.');
+})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => store.close());

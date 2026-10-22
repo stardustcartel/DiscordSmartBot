@@ -114,6 +114,10 @@ export async function deliverYouTubePush(env, entry) {
         posted = true;
         messageId = (await response.json()).id || "unknown";
         console.info(`YouTube announcement posted: ${detail} message=${messageId}`);
+        try {
+          if (/^\d{15,25}$/.test(messageId)) await env.DB.prepare("INSERT OR REPLACE INTO youtube_knowledge_receipts VALUES(?,?,?,?,?,?)")
+            .bind(row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId, messageId, content).run();
+        } catch (error) { console.warn(`YouTube knowledge receipt failed: ${detail} message=${messageId} error=${error.message}`); }
         await env.DB.prepare("UPDATE youtube_push_deliveries SET sent_at=? WHERE guild_id=? AND destination_id=? AND channel_id=? AND video_id=?").bind(Date.now(), row.guild_id, sub.destinationChannelId, entry.channelId, entry.videoId).run();
         const current = await getState(env.DB, row.guild_id);
         if (current) {

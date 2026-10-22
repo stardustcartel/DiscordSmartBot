@@ -92,7 +92,7 @@ class KnowledgeGroups {
   hydrate(row) {
     if (!row) return null;
     const memberIds = JSON.parse(row.memberIds);
-    const members = this.db.prepare("SELECT id,guildId,channelId,rootId,channelName,authorId,content,createdTimestamp,editedTimestamp,url,pinned,replyToId FROM messages WHERE id IN (SELECT value FROM json_each(?)) ORDER BY createdTimestamp,length(id),id").all(row.memberIds);
+    const members = this.db.prepare("SELECT id,guildId,channelId,rootId,channelName,authorId,content,createdTimestamp,editedTimestamp,url,pinned,replyToId,sourceType FROM messages WHERE id IN (SELECT value FROM json_each(?)) ORDER BY createdTimestamp,length(id),id").all(row.memberIds);
     return { ...row, vector: undefined, memberIds, members, url: members[0]?.url };
   }
   forMessage(message) {

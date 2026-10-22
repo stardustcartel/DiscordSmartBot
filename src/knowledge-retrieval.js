@@ -179,16 +179,18 @@ class KnowledgeRetrieval {
       refreshedChannels: [],
     };
     if (!access.destination.isServerDm && access.safeRoots.has(rootId)) {
-      try { await this.indexer.scan(access.destination, true); trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "ok" }); }
+      try { const indexing = await this.indexer.scan(access.destination, true); trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "ok", indexing }); }
       catch (error) { trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "failed", reason: error.code || error.name }); }
     }
     // Refresh recent content in selected readable roots, bounded so a large server does not stall replies.
     const refresh = [...access.safeRoots].slice(0, 4).map((id) => access.guild.channels.cache.get(id)).filter((c) => c?.messages && c.id !== channelId);
     await Promise.all(refresh.map(async (c) => {
-      try { await this.indexer.scan(c, true); trace.scope.refreshedChannels.push({ id: c.id, name: c.name, status: "ok" }); }
+      try { const indexing = await this.indexer.scan(c, true); trace.scope.refreshedChannels.push({ id: c.id, name: c.name, status: "ok", indexing }); }
       catch (error) { trace.scope.refreshedChannels.push({ id: c.id, name: c.name, status: "failed", reason: error.code || error.name }); }
     }));
     const refreshed = await this.access(client, guildId, channelId, userId);
+    trace.scope.indexedSourceCounts = this.store.db.prepare('SELECT channelId,sourceType,count(*) AS count FROM messages WHERE guildId=? AND channelId IN (SELECT value FROM json_each(?)) GROUP BY channelId,sourceType')
+      .all(guildId, JSON.stringify(refreshed.allowedIds));
     trace.scope.searchedChannels = [...new Set(refreshed.allowedIds)].map((id) => ({ id, name: refreshed.guild.channels.cache.get(id)?.name || this.store.db.prepare("SELECT channelName FROM messages WHERE guildId=? AND channelId=? LIMIT 1").get(guildId, id)?.channelName || null }));
     const key = `${guildId}:${channelId}:${userId}`;
     const previous = this.questions.get(key);
@@ -228,7 +230,7 @@ class KnowledgeRetrieval {
         records.push({ id: `S${records.length + 1}`, sourceType: "approved_answer", approvedAnswerId: source.id, question: source.question, updatedAt: source.updatedAt, content: source.content });
         continue;
       }
-      records.push({ id: `S${records.length + 1}`, channel: source.channelName, authorId: source.authorId,
+      records.push({ id: `S${records.length + 1}`, sourceType: source.sourceType || 'discord', channel: source.channelName, authorId: source.authorId,
         authorNames: savedBehavior.searchAssociations.filter(x => x.userId === source.authorId).map(x => ({ name:x.name, aliases:x.aliases })),
         messageId: source.id, groupId: source.groupId, groupMemberIds: source.groupMemberIds, replyToId: source.replyToId || null, contextGroupIds: source.contextGroupIds || [],
         postedAt: new Date(source.createdTimestamp).toISOString(), editedAt: source.editedTimestamp ? new Date(source.editedTimestamp).toISOString() : null, pinned: Boolean(source.pinned), content: source.content });

@@ -102,6 +102,9 @@ class DashboardSync {
       const appliedCheckpoints = new Set();
       for (const checkpoint of result.youtubeCheckpoints || []) {
         if (!client.guilds.cache.has(checkpoint.guild_id)) continue;
+        this.knowledgeIndexer?.store?.announcements?.record({ guildId: checkpoint.guild_id, channelId: checkpoint.destination_id,
+          youtubeChannelId: checkpoint.channel_id, videoId: checkpoint.video_id, sentAt: Number(checkpoint.sent_at),
+          messageId: checkpoint.message_id || null, content: checkpoint.content || null, method: 'webhook-delivery-receipt' });
         const key = `${checkpoint.guild_id}:${checkpoint.destination_id}:${checkpoint.channel_id}`;
         if (appliedCheckpoints.has(key)) continue;
         appliedCheckpoints.add(key);

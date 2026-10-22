@@ -67,6 +67,7 @@ const reminders = new ReminderStore({
 });
 const youtube = new YouTubeNotifier({
   guildSettings,
+  knowledgeStore: knowledge,
   pollIntervalMs: config.youtubePollIntervalMs,
 });
 const dashboard = createDashboard({ client, config, guildSettings, guildSecrets });

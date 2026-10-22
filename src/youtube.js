@@ -94,8 +94,9 @@ function announcementContent(subscription, feed, entry) {
 }
 
 class YouTubeNotifier {
-  constructor({ guildSettings, pollIntervalMs }) {
+  constructor({ guildSettings, pollIntervalMs, knowledgeStore }) {
     this.guildSettings = guildSettings;
+    this.knowledgeStore = knowledgeStore;
     this.pollIntervalMs = pollIntervalMs;
     this.timer = null;
     this.polling = false;
@@ -144,6 +145,12 @@ class YouTubeNotifier {
               allowedMentions: { parse: [] },
             });
             lastSent = entry;
+            try {
+              this.knowledgeStore?.announcements.record({ guildId: subscription.guildId, channelId: channel.id,
+                youtubeChannelId: subscription.youtubeChannelId, videoId: entry.id, sentAt: message.createdTimestamp,
+                messageId: message.id, content: message.content, method: 'poll-delivery-receipt' });
+              this.knowledgeStore?.upsert(message);
+            } catch (error) { console.warn(`YouTube announcement indexing failed: ${context} message=${message.id} error=${error.message}`); }
             console.info(`YouTube announcement posted: ${context} video=${entry.id} message=${message.id} method=poll`);
           } catch (error) {
             console.warn(`YouTube announcement failed: ${context} video=${entry.id} method=poll error=${error.message}`);

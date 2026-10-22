@@ -19,6 +19,7 @@ class FakeD1 {
   constructor() {
     this.topic = { channel_id: channel, requested_at: Date.now(), lease_expires_at: 0, created_at: Date.now() };
     this.deliveries = new Map();
+    this.receipts = [];
     this.state = { guild_id: guild, settings_json: JSON.stringify({ youtubeSubscriptions: [{ youtubeChannelId: channel, destinationChannelId: destination, lastVideoId: "previous123", sourceName: "Creator" }] }) };
   }
   prepare(sql) {
@@ -29,6 +30,7 @@ class FakeD1 {
       async first() { return sql.includes("youtube_push_topics") ? db.topic : null; },
       async all() { return sql.startsWith("PRAGMA") ? { results: [{ name: "openai_secret_json" }] } : { results: sql.includes("FROM guild_state") ? [db.state] : [] }; },
       async run() {
+        if (sql.startsWith("INSERT OR REPLACE INTO youtube_knowledge_receipts")) db.receipts.push(this.args);
         if (sql.startsWith("UPDATE youtube_push_topics")) { db.topic.lease_expires_at = this.args[0]; db.topic.requested_at = 0; }
         if (sql.startsWith("INSERT OR IGNORE INTO youtube_push_deliveries")) {
           const id = this.args.join(":");
@@ -66,7 +68,7 @@ globalThis.fetch = async (url, options) => {
   assert.equal(body.allowed_mentions.parse.length, 0);
   assert.match(body.content, /A & B/);
   sent++;
-  return new Response("{}", { status: 200 });
+  return new Response(JSON.stringify({ id: "1562503175339253790" }), { status: 200 });
 };
 try {
   const request = (signature) => new Request(callback, { method: "POST", body: entry, headers: { "X-Hub-Signature": signature } });
@@ -74,5 +76,8 @@ try {
   assert.equal((await onRequestPost({ env, request: request(`sha1=${hex}`) })).status, 200);
   assert.equal((await onRequestPost({ env, request: request(`sha1=${hex}`) })).status, 200);
   assert.equal(sent, 1);
+  assert.equal(DB.receipts.length, 1);
+  assert.equal(DB.receipts[0][4], "1562503175339253790");
+  assert.match(DB.receipts[0][5], /A & B/);
 } finally { globalThis.fetch = originalFetch; }
 console.log("YouTube push signature, challenge, and deduplication checks passed.");

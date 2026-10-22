@@ -12,7 +12,7 @@ const { KnowledgeRetrieval } = require("../src/knowledge-retrieval");
 const { AiChat } = require("../src/ai");
 const { effectivePolicy } = require("../src/knowledge-policy");
 const [guildId, channelId, userId, ...words] = process.argv.slice(2);
-if (![guildId, channelId, userId].every((id) => /^\d{15,25}$/.test(id || "")) || !words.length) throw new Error("Usage: node scripts/probe-knowledge.js <guild> <channel> <user> <question>");
+if (![guildId, userId].every((id) => /^\d{15,25}$/.test(id || "")) || !(channelId === 'dm' || /^\d{15,25}$/.test(channelId || '')) || !words.length) throw new Error("Usage: node scripts/probe-knowledge.js <guild> <channel|dm> <user> <question>");
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.once("clientReady", async () => {
   let store;
@@ -40,7 +40,7 @@ client.once("clientReady", async () => {
       eligibleRoots: [...prepared.access.safeRoots], outcome: prepared.searchOutcome, rounds: trace.searchRounds.map((r) => ({ searches: r.searches.map(({ query, totalMatches, returnedMatches }) => ({ query, totalMatches, returnedMatches })), review: r.review })),
       sources: prepared.sources.map((s) => ({ id: s.id, channel: s.channelName, content: s.content.slice(0, 400), url: s.url })) }, null, 2));
     const draft = await ai.respond({ ...indexer.credentials(guildId), openAiSpeed: settings.openAiSpeed, openAiReasoning: settings.openAiReasoning,
-      scopeId: guildId, userId, text, personality: settings.personality, context: prepared.context, forgetHistory: true, knowledgePolicy: policy });
+      scopeId: guildId, userId, text, personality: settings.personality, rules: settings.rules, context: prepared.context, forgetHistory: true, knowledgePolicy: policy });
     const answer = await retrieval.finish({ client, guildId, channelId, userId, answer: draft, prepared, policy });
     console.log(JSON.stringify({ stage: "answer_checked", seconds: (Date.now() - started) / 1000, answer }, null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }

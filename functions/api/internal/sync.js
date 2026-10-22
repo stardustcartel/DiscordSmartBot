@@ -85,7 +85,7 @@ export async function onRequestPost({ env, request, context }) {
     const rows = await env.DB.prepare("SELECT id, guild_id, action, actor_id, source, created_at, snapshot_json FROM guild_settings_audit WHERE guild_id = ? AND id > ? ORDER BY id LIMIT 100").bind(guildId, Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0).all();
     auditEvents.push(...(rows.results || []));
   }
-  const checkpointRows = await env.DB.prepare("SELECT guild_id,destination_id,channel_id,video_id,sent_at FROM youtube_push_deliveries WHERE sent_at>0 ORDER BY sent_at DESC LIMIT 1000").all();
+  const checkpointRows = await env.DB.prepare("SELECT d.guild_id,d.destination_id,d.channel_id,d.video_id,d.sent_at,r.message_id,r.content FROM youtube_push_deliveries d LEFT JOIN youtube_knowledge_receipts r ON r.guild_id=d.guild_id AND r.destination_id=d.destination_id AND r.channel_id=d.channel_id AND r.video_id=d.video_id WHERE d.sent_at>0 ORDER BY d.sent_at DESC LIMIT 1000").all();
   const youtubeCheckpoints = (checkpointRows.results || []).filter((row) => installedIds.includes(row.guild_id));
   if (String(env.YOUTUBE_WEBHOOK_SECRET || "").length >= 32) {
     const task = maintainYouTubeSubscriptions(env).catch((error) => console.warn("YouTube subscription maintenance failed:", error.message));

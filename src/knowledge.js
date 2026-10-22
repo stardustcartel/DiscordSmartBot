@@ -3,6 +3,7 @@ const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const { readJson } = require("./storage");
 const { KnowledgeGroups } = require("./knowledge-groups");
+const { AnnouncementEvidence } = require('./knowledge-announcements');
 
 const stopWords = new Set("the and this that what when where which who how are was were have has had can could would should will with from about please help tell does did for you your our their there they into also some any its not but an my or it to is as of in on at be am me do im ive".split(" "));
 const terms = (text) => [...new Set(String(text).toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])].filter((t) => !stopWords.has(t)).slice(0, 40);
@@ -11,6 +12,7 @@ const pause = () => new Promise((resolve) => setImmediate(resolve));
 class KnowledgeBase {
   constructor(config, guildSettings) {
     this.guildSettings = guildSettings;
+    this.dataDirectory = config.dataDirectory;
     fs.mkdirSync(config.dataDirectory, { recursive: true });
     this.db = new DatabaseSync(path.join(config.dataDirectory, "knowledge.sqlite"));
     fs.chmodSync(path.join(config.dataDirectory, "knowledge.sqlite"), 0o600);
@@ -31,6 +33,7 @@ class KnowledgeBase {
         INSERT INTO message_search(rowid,content,channelName) VALUES(new.rowid,new.content,new.channelName); END;
       CREATE TABLE IF NOT EXISTS checkpoints (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
     if (!this.db.prepare("PRAGMA table_info(messages)").all().some((column) => column.name === "replyToId")) this.db.exec("ALTER TABLE messages ADD COLUMN replyToId TEXT");
+    if (!this.db.prepare("PRAGMA table_info(messages)").all().some((column) => column.name === "sourceType")) this.db.exec("ALTER TABLE messages ADD COLUMN sourceType TEXT NOT NULL DEFAULT 'discord'");
     this.db.exec("CREATE INDEX IF NOT EXISTS messages_reply ON messages(guildId,channelId,replyToId)");
     // Keep the old JSON intact as a recovery copy; import only once.
     if (!this.checkpoint("migration-v1")) {
@@ -42,6 +45,7 @@ class KnowledgeBase {
       });
     }
     this.groups = new KnowledgeGroups(this);
+    this.announcements = new AnnouncementEvidence(this);
   }
 
   transaction(work) {
@@ -57,33 +61,47 @@ class KnowledgeBase {
   save() { /* SQLite commits atomically; compatibility with existing slash commands. */ }
   close() { this.db.close(); }
   shouldIndex(message) {
-    if (!message?.guildId || message.author?.bot || message.webhookId || message.system || message.channel?.type === 12) return false;
+    return this.indexDecision(message).allowed;
+  }
+  indexDecision(message) {
+    if (!message?.guildId) return { allowed: false, reason: 'not_server_message' };
+    if (message.webhookId || message.system || message.channel?.type === 12) return { allowed: false, reason: 'webhook_system_or_private_thread' };
     const ids = this.guildSettings.get(message.guildId).knowledgeChannelIds;
-    return ids.includes(message.channelId) || ids.includes(message.channel?.parentId);
+    if (!ids.includes(message.channelId) && !ids.includes(message.channel?.parentId)) return { allowed: false, reason: 'channel_not_selected' };
+    if (!message.content?.trim()) return { allowed: false, reason: 'no_text' };
+    if (message.author?.bot) {
+      const announcement = this.announcements.identify(message);
+      return announcement ? { allowed: true, reason: 'verified_youtube_announcement', ...announcement }
+        : { allowed: false, reason: 'bot_message_without_delivery_receipt' };
+    }
+    return { allowed: true, reason: 'human_message', sourceType: 'discord' };
   }
   store(message) {
-    this.db.prepare(`INSERT INTO messages(id,guildId,channelId,rootId,channelName,authorId,content,createdTimestamp,editedTimestamp,url,pinned,replyToId)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+    this.db.prepare(`INSERT INTO messages(id,guildId,channelId,rootId,channelName,authorId,content,createdTimestamp,editedTimestamp,url,pinned,replyToId,sourceType)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
       rootId=excluded.rootId, channelName=excluded.channelName, authorId=excluded.authorId,
       vector=CASE WHEN messages.content=excluded.content AND messages.channelName=excluded.channelName THEN messages.vector ELSE NULL END,
       vectorModel=CASE WHEN messages.content=excluded.content AND messages.channelName=excluded.channelName THEN messages.vectorModel ELSE NULL END,
-      content=excluded.content, editedTimestamp=excluded.editedTimestamp, pinned=excluded.pinned, replyToId=excluded.replyToId`).run(
+      content=excluded.content, editedTimestamp=excluded.editedTimestamp, pinned=excluded.pinned, replyToId=excluded.replyToId, sourceType=excluded.sourceType`).run(
       message.id, message.guildId, message.channelId, message.rootId, message.channelName || message.channelId,
       message.authorId || "", message.content, message.createdTimestamp || Date.now(), message.editedTimestamp || null,
-      `https://discord.com/channels/${message.guildId}/${message.channelId}/${message.id}`, message.pinned ? 1 : 0, message.replyToId || null);
+      `https://discord.com/channels/${message.guildId}/${message.channelId}/${message.id}`, message.pinned ? 1 : 0, message.replyToId || null, message.sourceType || 'discord');
   }
   upsert(message) {
     if (message.partial) return false;
-    if (!this.shouldIndex(message) || !message.content?.trim()) {
+    const decision = this.indexDecision(message);
+    if (!decision.allowed) {
       const removed = this.remove(message);
       const roots = this.guildSettings.get(message.guildId).knowledgeChannelIds;
       if (message.channel?.type !== 12 && (roots.includes(message.channelId) || roots.includes(message.channel?.parentId))) this.groups.boundary(message);
       return removed;
     }
+    const firstAnnouncement = decision.sourceType === 'youtube_announcement' && !this.db.prepare('SELECT id FROM messages WHERE id=?').get(message.id);
     this.store({ id: message.id, guildId: message.guildId, channelId: message.channelId,
       rootId: message.channel?.isThread?.() ? message.channel.parentId : message.channelId,
       channelName: message.channel?.name, authorId: message.author?.id, content: message.content.trim(),
-      createdTimestamp: message.createdTimestamp, editedTimestamp: message.editedTimestamp, pinned: message.pinned, replyToId: message.reference?.messageId || null });
+      createdTimestamp: message.createdTimestamp, editedTimestamp: message.editedTimestamp, pinned: message.pinned, replyToId: message.reference?.messageId || null, sourceType: decision.sourceType });
+    if (firstAnnouncement) console.info('Knowledge announcement indexed:', JSON.stringify({ guildId: message.guildId, channelId: message.channelId, messageId: message.id, ...decision }));
     return true;
   }
   remove(message) {
