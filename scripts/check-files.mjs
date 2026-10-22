@@ -60,6 +60,13 @@ try {
   assert.equal((await call('missing')).status,404);
   assert.deepEqual(await (await call('folder')).json(),{folder:{id:'folder',name:'Q&A folder'}});
   assert.deepEqual(JSON.parse((await db.prepare('SELECT folders_json FROM google_connections WHERE guild_id=?').bind(b).first()).folders_json),[{id:'folder-test',name:'Q&A'}],'validation must not commit a folder selection');
+  for(const description of ['', '   ']) {
+    const form=new FormData();form.append('file',new File([bytes],'transcript.txt',{type:'text/plain'}));form.append('description',description);
+    const request=new Request('https://example.test/api/guild/'+b+'/files',{method:'POST',headers:{Origin:'https://example.test',Cookie:'dashboard_session='+session},body:form});
+    const response=await dashboardFiles({env,request,params:{guildId:b}});
+    assert.equal(response.status,400,'uploads without a nonblank description must be rejected');
+  }
+  assert.equal((await fileMeta(env,b)).files.length,0,'rejected uploads must not be stored');
 } finally {globalThis.fetch=originalFetch;}
 let identityReads=0;
 globalThis.fetch=async()=>{identityReads++;return Response.json({user:{emailAddress:'test@example.test'}});};

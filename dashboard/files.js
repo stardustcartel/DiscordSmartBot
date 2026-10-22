@@ -45,10 +45,13 @@ function setKnowledgeLock(locked) {
 }
 function updateFileUploadSelection() {
   const files=$('#file-upload-input').files;
+  const hasFiles=files.length>0,description=$('#file-upload-description');
   $('#file-upload-label').textContent=!files.length?'Choose files':files.length===1?files[0].name:`${files.length} files selected`;
   $('#file-upload-clear').hidden=!files.length;
   $('#file-upload-clear').disabled=fileBusy;
-  $('#file-upload-save').disabled=!fileConfigured || !files.length || fileBusy;
+  $('#file-upload-description-required').hidden=!hasFiles;
+  description.required=hasFiles;
+  $('#file-upload-save').disabled=!fileConfigured || !hasFiles || !description.value.trim() || fileBusy;
 }
 function closeFileChannelMenu(){const list=$('#file-channel-options');list.hidden=true;$('#file-channel-trigger').setAttribute('aria-expanded','false');$('#file-channel-trigger').classList.remove('open');}
 function fileSelectionButtons(){
@@ -176,10 +179,11 @@ function setupFiles(){
   fileFolderInputState();
   $('#file-folder-save').onclick=()=>fileAction('folders',{folderIds:fileFolders.map(f=>f.id)});
   $('#file-upload-input').onchange=updateFileUploadSelection;
+  $('#file-upload-description').oninput=updateFileUploadSelection;
   $('#file-upload-clear').onclick=event=>{event.preventDefault();event.stopPropagation();if(fileBusy)return;$('#file-upload-input').value='';updateFileUploadSelection();};
-  $('#file-upload-form').onsubmit=async event=>{event.preventDefault();const guildId=selected,files=[...$('#file-upload-input').files];if(!guildId || !files.length || fileBusy)return;
+  $('#file-upload-form').onsubmit=async event=>{event.preventDefault();const guildId=selected,files=[...$('#file-upload-input').files],description=$('#file-upload-description').value.trim();if(!guildId || !files.length || !description || fileBusy)return;
     fileBusy=true;updateFileUploadSelection();$('#file-upload-input').disabled=true;
-    try{for(const file of files){const form=new FormData();form.append('file',file);form.append('description',$('#file-upload-description').value);
+    try{for(const file of files){const form=new FormData();form.append('file',file);form.append('description',description);
       const response=await fetch(`/api/guild/${guildId}/files`,{method:'POST',body:form});const data=await response.json();if(!response.ok)throw Error(`${file.name}: ${data.error || 'Upload failed.'}`);}
       if(guildId===selected){$('#file-upload-form').reset();toast(`${files.length} file${files.length===1?'':'s'} uploaded. Indexing will begin shortly.`);}
     }catch(error){toast(error.message);}finally{fileBusy=false;$('#file-upload-input').disabled=!fileConfigured;updateFileUploadSelection();await loadFiles().catch(()=>{});}

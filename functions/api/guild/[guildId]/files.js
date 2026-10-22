@@ -35,7 +35,7 @@ export async function onRequestPost({env,request,params}) {
     if(type.startsWith('multipart/form-data')) {
       if(Number(request.headers.get('Content-Length'))>fileLimits.bytes+65536) return json({error:'File exceeds the 10 MB limit.'},413,noStore);
       const form=await request.formData(), file=form.get('file'), description=String(form.get('description') || '').trim();
-      if(!(file instanceof File) || description.length>fileLimits.description) return json({error:'Choose a file and a description of at most 2,000 characters.'},400,noStore);
+      if(!(file instanceof File) || !description || description.length>fileLimits.description) return json({error:'Choose a file and a description of at most 2,000 characters.'},400,noStore);
       if(file.size>fileLimits.bytes) return json({error:'File exceeds the 10 MB limit.'},413,noStore);
       const result=await saveFile(env,guildId,{name:file.name,description,actorId:access.user.id},new Uint8Array(await file.arrayBuffer()));
       return json({ok:true,...result},200,noStore);
