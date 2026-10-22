@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.4", at: "2026-10-22T23:05:42Z", historical: false, changes: [
+    "Fixed DM server switching for numbered replies with punctuation, ordinal replies, and pasted server names. Invalid selections now keep the original question while the server chooser stays open.",
+    "Natural requests to switch servers open the chooser directly, without using an AI request."
+  ] },
   { version: "2.6.3", at: "2026-10-22T07:15:18Z", historical: false, changes: [
     "Broadened Discord knowledge indexing to include other bots and integrations, including rich-embed text, in selected source channels. Older eligible messages are recovered incrementally without rebuilding the database.",
     "Kept existing permission checks, citations, search budgets, and exclusion of this bot's own AI replies. Added source-origin and indexing diagnostics to help distinguish missing data from unsuccessful searches."
