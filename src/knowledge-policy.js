@@ -8,12 +8,14 @@ function normalizePolicy(value = {}) {
     citationCount: Number.isInteger(value?.citationCount) && value.citationCount >= 1 && value.citationCount <= 5 ? value.citationCount : 3,
     generalChannels: ids(value?.generalChannels),
     uncitedChannels: ids(value?.uncitedChannels),
+    generalDm: value?.generalDm === true,
+    uncitedDm: value?.uncitedDm === true,
   };
 }
 function effectivePolicy(value, channel) {
   const policy = normalizePolicy(value);
-  const matches = (ids) => ids.includes(channel?.id) || (channel?.isThread?.() && ids.includes(channel.parentId));
-  return { ...policy, knowledgeOnly: policy.knowledgeOnly && !matches(policy.generalChannels), requireCitations: policy.requireCitations && !matches(policy.uncitedChannels) };
+  const matches = (ids, dmException) => channel?.isServerDm === true ? dmException : ids.includes(channel?.id) || (channel?.isThread?.() && ids.includes(channel.parentId));
+  return { ...policy, knowledgeOnly: policy.knowledgeOnly && !matches(policy.generalChannels, policy.generalDm), requireCitations: policy.requireCitations && !matches(policy.uncitedChannels, policy.uncitedDm) };
 }
 const insufficientEvidence = "I couldn't verify an answer from the available server knowledge. Could you clarify what you mean or point me to a relevant post?";
 function trustedClock(now = new Date()) {

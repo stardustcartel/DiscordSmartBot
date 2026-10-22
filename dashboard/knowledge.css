@@ -32,6 +32,8 @@
 .knowledge-policy-select .select-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .knowledge-control-details { border-top: 1px solid #9480ef33; padding-top: 20px; }
 #knowledge-policy-form [hidden] { display: none !important; }
+.knowledge-dm-exception { display: flex; align-items: center; gap: 9px; margin-top: 15px; font-size: 12px; }
+.knowledge-dm-exception input { width: 17px; height: 17px; accent-color: #9b8aff; }
 @media(max-width:720px) { .knowledge-control-card { padding: 16px; } .knowledge-switch-row { gap: 12px; } }
 @media(prefers-reduced-motion:reduce) { #knowledge-policy-form input[role=switch], #knowledge-policy-form input[role=switch]::before { transition: none; } }
 @media(max-width:720px) { #knowledge-status { padding: 16px; } #knowledge .panel-heading h2 { overflow-wrap: anywhere; } }

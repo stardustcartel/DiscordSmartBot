@@ -71,7 +71,7 @@ try {
   assert.equal(inspectEvidenceReview(approvedReview, records, policy).answer, approvedReview.answer);
   assert.ok(cite(approvedReview.answer, [source]).includes('[Official server guidance 1](https://example.com/library)'));
   assert.equal(cite('[S1]', [{ ...source, url: '' }]), '[Official server guidance 1]');
-  const retrieval = new KnowledgeRetrieval({ guildSettings: { get: () => state.settings }, db: { prepare: () => ({ all: () => [] }) } }, { credentials: () => ({ provider: 'openai', apiKey: 'test', model: 'test' }) }, { generate: async options => { assert.ok(options.instructions.includes(savedBehavior.rules)); return JSON.stringify(approvedReview); } });
+  const retrieval = new KnowledgeRetrieval({ guildSettings: { get: () => state.settings }, db: { exec() {}, prepare: () => ({ all: () => [] }) } }, { credentials: () => ({ provider: 'openai', apiKey: 'test', model: 'test' }) }, { generate: async options => { assert.ok(options.instructions.includes(savedBehavior.rules)); return JSON.stringify(approvedReview); } });
   const access = { guild: { id: guildId, channels: { cache: new Map() } }, destination: { name: 'test forum', isThread: () => false }, safeRoots: new Set(), allowedIds: [], decisions: new Map() };
   retrieval.access = async () => access;
   const prepared = await retrieval.prepare({ guildId, channelId: 'test', userId, text: 'Where are the assets?', behavior: state.settings });

@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.0", at: "2026-10-22T02:31:42Z", historical: false, changes: [
+    "Removed the duplicate DM /chat command; /chat remains available inside servers.",
+    "Added optional server-linked direct messages with membership, role-access, and server-selection checks. Each conversation uses the selected server's AI provider and API key.",
+    "Knowledge-backed mode and citation requirements now apply in DMs, with separate DM exemptions and source-permission checks."
+  ] },
   { version: "2.5.5", at: "2026-10-22T02:11:02Z", historical: false, changes: [
     "Required a description for uploaded files, with a contextual required marker and upload button that activates only when both a file and description are provided."
   ] },

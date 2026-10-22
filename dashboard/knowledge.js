@@ -9,8 +9,8 @@ let knowledgePolicyRevision = 0;
 let knowledgeSavedGuild = null;
 let knowledgeSavedChannels = [];
 let knowledgeSavedPolicy = null;
-let knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [] };
-const knowledgePolicyValue = (policy) => JSON.stringify({ knowledgeOnly: Boolean(policy?.knowledgeOnly), requireCitations: Boolean(policy?.requireCitations), citationCount: Number(policy?.citationCount || 3), generalChannels: [...(policy?.generalChannels || [])].sort(), uncitedChannels: [...(policy?.uncitedChannels || [])].sort() });
+let knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], generalDm: false, uncitedDm: false };
+const knowledgePolicyValue = (policy) => JSON.stringify({ knowledgeOnly: Boolean(policy?.knowledgeOnly), requireCitations: Boolean(policy?.requireCitations), citationCount: Number(policy?.citationCount || 3), generalChannels: [...(policy?.generalChannels || [])].sort(), uncitedChannels: [...(policy?.uncitedChannels || [])].sort(), generalDm: Boolean(policy?.generalDm), uncitedDm: Boolean(policy?.uncitedDm) });
 function updateKnowledgeSaveButtons() {
   const ready = Boolean(selected && selected === knowledgeSavedGuild && !$("#knowledge-form").inert);
   $("#knowledge-form button[type=submit]").disabled = !ready || $("#knowledge-form").getAttribute("aria-busy") === "true" || JSON.stringify([...knowledgeSelections].sort()) === JSON.stringify([...knowledgeSavedChannels].sort());
@@ -27,6 +27,8 @@ function closeKnowledgePolicyMenus() {
 function renderKnowledgePolicy() {
   $("#knowledge-only").checked = knowledgePolicy.knowledgeOnly;
   $("#knowledge-citations").checked = knowledgePolicy.requireCitations;
+  $("#knowledge-general-dm").checked = knowledgePolicy.generalDm;
+  $("#knowledge-uncited-dm").checked = knowledgePolicy.uncitedDm;
   $("#knowledge-count-field").hidden = !knowledgePolicy.requireCitations;
   $("#knowledge-general-field").hidden = !knowledgePolicy.knowledgeOnly;
   $("#knowledge-uncited-field").hidden = !knowledgePolicy.requireCitations;
@@ -89,10 +91,10 @@ async function loadKnowledge(reset = false) {
   $("#knowledge-policy-form").inert = false;
   knowledgeSavedGuild = guildId;
   knowledgeSavedChannels = [...data.channelIds];
-  knowledgeSavedPolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], ...data.policy };
+  knowledgeSavedPolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], generalDm: false, uncitedDm: false, ...data.policy };
   const guildChanged = knowledgePolicyGuild !== guildId;
   if (guildChanged || !knowledgePolicyDirty) {
-    knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], ...data.policy };
+    knowledgePolicy = { knowledgeOnly: false, requireCitations: false, citationCount: 3, generalChannels: [], uncitedChannels: [], generalDm: false, uncitedDm: false, ...data.policy };
     knowledgePolicyDirty = false;
     knowledgePolicyGuild = guildId;
   }
@@ -116,6 +118,9 @@ async function loadKnowledge(reset = false) {
 function setupKnowledge() {
   for (const [id, key] of [["#knowledge-only", "knowledgeOnly"], ["#knowledge-citations", "requireCitations"]]) $(id).onchange = (event) => {
     knowledgePolicy[key] = event.target.checked; knowledgePolicyDirty = true; knowledgePolicyRevision++; closeKnowledgePolicyMenus(); renderKnowledgePolicy();
+  };
+  for (const [id, key] of [["#knowledge-general-dm", "generalDm"], ["#knowledge-uncited-dm", "uncitedDm"]]) $(id).onchange = (event) => {
+    knowledgePolicy[key] = event.target.checked; knowledgePolicyDirty = true; knowledgePolicyRevision++; renderKnowledgePolicy();
   };
   for (const kind of knowledgePolicyKinds) $(`#knowledge-${kind}-trigger`).onclick = () => {
     const list = $(`#knowledge-${kind}-options`), trigger = $(`#knowledge-${kind}-trigger`);

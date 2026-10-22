@@ -49,15 +49,19 @@ globalThis.fetch = async (input) => {
 
 try {
   const params = { guildId };
-  let response = await onRequestPut({ env, params, request: requestFor({ channelIds: [textId, forumId], autoChannelIds: [forumId], roleIds: [] }) });
+  let response = await onRequestPut({ env, params, request: requestFor({ channelIds: [textId, forumId], autoChannelIds: [forumId], roleIds: [], dmEnabled: true }) });
   assert.equal(response.status, 200);
   assert.deepEqual(JSON.parse(env.DB.row.settings_json).botAutoResponseChannelIds, [forumId]);
-  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [textId], autoChannelIds: [forumId], roleIds: [] }) });
+  assert.equal(JSON.parse(env.DB.row.settings_json).dmEnabled, true);
+  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [textId], autoChannelIds: [forumId], roleIds: [], dmEnabled: true }) });
   assert.equal(response.status, 400, "Automatic channels must be response channels");
-  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [], autoChannelIds: [otherId], roleIds: [] }) });
+  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [], autoChannelIds: [otherId], roleIds: [], dmEnabled: true }) });
   assert.equal(response.status, 400, "Announcement channels cannot be automatic response channels");
-  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [], autoChannelIds: [textId], roleIds: [] }) });
+  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [], autoChannelIds: [textId], roleIds: [], dmEnabled: false }) });
   assert.equal(response.status, 200, "An empty response allowlist represents all forum and text channels");
+  assert.equal(JSON.parse(env.DB.row.settings_json).dmEnabled, false);
+  response = await onRequestPut({ env, params, request: requestFor({ channelIds: [], autoChannelIds: [], roleIds: [], dmEnabled: 'yes' }) });
+  assert.equal(response.status, 400, 'DM opt-in must be a boolean');
   console.log("Automatic response channel checks passed.");
 } finally {
   globalThis.fetch = originalFetch;

@@ -88,6 +88,7 @@ select{color-scheme:dark}select option{background:#171727;color:#f4f2ff}
 .bot-access-card h3{margin:0 0 8px;color:var(--text);font-size:15px;font-weight:800}
 .bot-access-card .hint{margin:0 0 15px;font-size:12px}
 .bot-access-card .field-help{display:block;margin-top:9px}
+.dm-switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px}.dm-switch-row input{appearance:none;-webkit-appearance:none;position:relative;width:46px;height:26px;padding:0;margin:0;border:1px solid #9480ef66;border-radius:20px;background:#292237;flex:0 0 46px;cursor:pointer}.dm-switch-row input::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:#ded9ec;transition:transform .18s}.dm-switch-row input:checked{background:#8065d8;box-shadow:0 0 16px #9480ef88;border-color:#ae96ff}.dm-switch-row input:checked::before{transform:translateX(20px);background:#fff}
 .bot-auto-section{margin-top:20px;padding-top:18px;border-top:1px solid #373652}
 .bot-access-settings form>button{justify-self:start;color:#fff}
 .multi-select-option{display:flex;align-items:center;gap:9px}

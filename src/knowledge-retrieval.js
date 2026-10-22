@@ -54,18 +54,23 @@ class KnowledgeRetrieval {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) throw new Error("Server is not available.");
     await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
-    const [member, bot, destination] = await Promise.all([
+    const dm = channelId === 'dm';
+    const [member, bot, channel] = await Promise.all([
       guild.members.fetch({ user: userId, force: true }), guild.members.fetchMe({ force: true }),
-      guild.channels.fetch(channelId, { force: true }),
+      dm ? Promise.resolve(null) : guild.channels.fetch(channelId, { force: true }),
     ]);
-    if (!canRead(destination, member) || !canRead(destination, bot)) throw new Error("Cannot verify access to this conversation.");
-    const roots = this.store.guildSettings.get(guildId).knowledgeChannelIds;
-    const verifiedMembers = await loadAudienceMembers(guild, [destination, ...roots.map((id) => guild.channels.cache.get(id))]);
+    const settings = this.store.guildSettings.get(guildId);
+    if (dm && (!settings.dmEnabled || (settings.botAccessRoleIds.length && !settings.botAccessRoleIds.some(id => member.roles.cache.has(id))))) throw new Error("Direct messages are not enabled for this member.");
+    const destination = dm ? { id: 'dm', guildId, name: 'Direct message', isServerDm: true, isThread: () => false } : channel;
+    if (!dm && (!canRead(destination, member) || !canRead(destination, bot))) throw new Error("Cannot verify access to this conversation.");
+    const roots = settings.knowledgeChannelIds;
+    const verifiedMembers = dm ? new Map() : await loadAudienceMembers(guild, [destination, ...roots.map((id) => guild.channels.cache.get(id))]);
     const decisions = new Map();
     const safeRoots = new Set(roots.filter((id) => {
       const source = guild.channels.cache.get(id);
-      const decision = !canRead(source, member) ? { allowed: false, reason: "requester_cannot_read_source" }
-        : !canRead(source, bot) ? { allowed: false, reason: "bot_cannot_read_source" } : audienceDecision(source, destination, verifiedMembers);
+      const decision = dm && source?.nsfw ? { allowed: false, reason: "age_restricted_source_in_dm" }
+        : !canRead(source, member) ? { allowed: false, reason: "requester_cannot_read_source" }
+        : !canRead(source, bot) ? { allowed: false, reason: "bot_cannot_read_source" } : dm ? { allowed: true, reason: "dm_member_can_read_source" } : audienceDecision(source, destination, verifiedMembers);
       decisions.set(id, decision);
       return decision.allowed;
     }));
@@ -91,7 +96,7 @@ class KnowledgeRetrieval {
       try {
         if (!channels.has(stored.channelId)) channels.set(stored.channelId, access.guild.channels.fetch(stored.channelId, { force: true }));
         const channel = await channels.get(stored.channelId);
-        if (!canRead(channel, access.member) || !canRead(channel, access.bot) || !audienceDecision(channel, access.destination, access.verifiedMembers).allowed) return null;
+        if (channel.type === 12 || (access.destination.isServerDm && channel.nsfw) || !canRead(channel, access.member) || !canRead(channel, access.bot) || (!access.destination.isServerDm && !audienceDecision(channel, access.destination, access.verifiedMembers).allowed)) return null;
         if (!refreshMessages) return { ...stored, channelName: channel.name };
         const live = await channel.messages.fetch({ message: stored.id, cache: false, force: true });
         if (!this.store.shouldIndex(live) || !live.content?.trim()) { this.store.remove(stored); return null; }
@@ -173,7 +178,7 @@ class KnowledgeRetrieval {
       selectedRoots: selected.map((id) => ({ id, name: access.guild.channels.cache.get(id)?.name || null, readableHere: access.safeRoots.has(id), ...access.decisions.get(id) })),
       refreshedChannels: [],
     };
-    if (access.safeRoots.has(rootId)) {
+    if (!access.destination.isServerDm && access.safeRoots.has(rootId)) {
       try { await this.indexer.scan(access.destination, true); trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "ok" }); }
       catch (error) { trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "failed", reason: error.code || error.name }); }
     }

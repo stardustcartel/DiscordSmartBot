@@ -114,6 +114,7 @@ class GuildSettingsStore {
       botResponseChannelIds: [],
       botAutoResponseChannelIds: [],
       botAccessRoleIds: [],
+      dmEnabled: false,
       youtubeSubscriptions: [],
       reminderTimeZone: this.config.defaultReminderTimeZone,
       aiResponsesPerHour: this.config.defaultAiResponsesPerHour,
@@ -151,6 +152,7 @@ class GuildSettingsStore {
       botResponseChannelIds: cleanChannelIds(value?.botResponseChannelIds),
       botAutoResponseChannelIds: cleanChannelIds(value?.botAutoResponseChannelIds),
       botAccessRoleIds: cleanChannelIds(value?.botAccessRoleIds),
+      dmEnabled: value?.dmEnabled === true,
       youtubeSubscriptions: cleanYouTubeSubscriptions(value?.youtubeSubscriptions),
       reminderTimeZone: timeZone || defaults.reminderTimeZone,
       aiResponsesPerHour:

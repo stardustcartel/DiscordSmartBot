@@ -9,7 +9,8 @@ export function validKnowledgePolicy(policy) {
   return policy && typeof policy === "object" && !Array.isArray(policy) &&
     typeof policy.knowledgeOnly === "boolean" && typeof policy.requireCitations === "boolean" &&
     Number.isInteger(policy.citationCount) && policy.citationCount >= 1 && policy.citationCount <= 5 &&
-    validIds(policy.generalChannels) && validIds(policy.uncitedChannels);
+    validIds(policy.generalChannels) && validIds(policy.uncitedChannels) &&
+    typeof policy.generalDm === "boolean" && typeof policy.uncitedDm === "boolean";
 }
 
 // Evaluate the configuring member's actual channel permissions, not dashboard access alone.
@@ -63,7 +64,7 @@ export async function onRequestPut({ env, request, params }) {
       if (policy[key].some((id) => !allowed.has(id))) return json({ error: "Choose exception channels in this server that you can read." }, 400);
     }
   }
-  const cleanPolicy = policy && { knowledgeOnly: policy.knowledgeOnly, requireCitations: policy.requireCitations, citationCount: policy.citationCount, generalChannels: policy.generalChannels, uncitedChannels: policy.uncitedChannels };
+  const cleanPolicy = policy && { knowledgeOnly: policy.knowledgeOnly, requireCitations: policy.requireCitations, citationCount: policy.citationCount, generalChannels: policy.generalChannels, uncitedChannels: policy.uncitedChannels, generalDm: policy.generalDm, uncitedDm: policy.uncitedDm };
   await mutateState(env.DB, params.guildId, (state) => ({ ...state, settings: { ...state.settings, ...(ids !== undefined ? { knowledgeChannelIds: ids } : {}), ...(cleanPolicy ? { knowledgePolicy: cleanPolicy } : {}) } }), session.user.id);
   return json({ ok: true, message: policy ? "Knowledge answer controls saved. The bot will pick them up on its next sync." : "Knowledge channels saved. Indexing will update shortly." });
 }

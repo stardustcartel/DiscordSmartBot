@@ -71,9 +71,12 @@ async function main() {
   assert.equal(saved.policy.knowledgeOnly, false);
   assert.equal(saved.policy.requireCitations, true);
   assert.deepEqual(saved.policy.uncitedChannels, [channelId, otherId]);
+  assert.equal(saved.policy.uncitedDm, false);
   assert.equal(saved.channelIds, undefined, "Policy save must not overwrite source selection");
   $("#knowledge-only").onchange({ target: { checked: true } });
   assert.equal($("#knowledge-general-field").hidden, false);
+  $("#knowledge-general-dm").onchange({ target: { checked: true } });
+  assert.equal($("#knowledge-general-dm").checked, true);
   $("#knowledge-citations").onchange({ target: { checked: false } });
   assert.equal($("#knowledge-general-field").hidden, false, "Turning citations off must not hide grounding exceptions");
   assert.equal($("#knowledge-count-field").hidden, true);

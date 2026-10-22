@@ -31,6 +31,7 @@ export function settingsAuditSnapshot(settings = {}, geminiSecret = null, openai
     botResponseChannelIds: settings.botResponseChannelIds || [],
     botAutoResponseChannelIds: settings.botAutoResponseChannelIds || [],
     botAccessRoleIds: settings.botAccessRoleIds || [],
+    dmEnabled: settings.dmEnabled === true,
     youtubeSubscriptions: (settings.youtubeSubscriptions || []).map((item) => ({
       youtubeChannelId: item.youtubeChannelId,
       sourceName: item.sourceName,

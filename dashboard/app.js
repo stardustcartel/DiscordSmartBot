@@ -40,7 +40,7 @@ function updateSaveButtons() {
     const field = form.dataset.profileField, input = form.elements.namedItem(field);
     set(`[data-profile-field="${field}"] button[type=submit]`, !profileBusy && (field === "avatar" || field === "banner" ? Boolean(input.files?.length) : input.value !== (settings.profile?.[field] || "")));
   }
-  set("#bot-access-form button[type=submit]", !sameSelection(botAccessSelections.channels, settings.botResponseChannelIds) || !sameSelection(botAccessSelections.auto, settings.botAutoResponseChannelIds) || !sameSelection(botAccessSelections.roles, settings.botAccessRoleIds));
+  set("#bot-access-form button[type=submit]", !sameSelection(botAccessSelections.channels, settings.botResponseChannelIds) || !sameSelection(botAccessSelections.auto, settings.botAutoResponseChannelIds) || !sameSelection(botAccessSelections.roles, settings.botAccessRoleIds) || Boolean($("#bot-dm-enabled").checked) !== Boolean(settings.dmEnabled));
   const youtubeSource = $("#youtube-form [name=source]").value.trim();
   const youtubeDestination = $("#destination").value;
   const youtubeTemplate = $("#youtube-form [name=announcementTemplate]").value.trim();
@@ -445,6 +445,7 @@ async function loadSettings() {
   setKnowledgeLock(!data.hasGeminiKey && !data.hasOpenAiKey);
   renderDestinationChannels((data.channels || []).filter((channel) => [0, 5].includes(channel.type)));
   renderBotAccessControls((data.channels || []).filter((channel) => channel.type === 0 || channel.type === 15), data.roles || []);
+  $("#bot-dm-enabled").checked = Boolean(settings.dmEnabled);
   const channelNames = new Map((data.channels || []).map((channel) => [channel.id, channel.name]));
   $("#subscriptions").innerHTML = settings.youtubeSubscriptions?.length ? settings.youtubeSubscriptions.map((item) => `<div class="item"><span class="subscription-source"><strong>${esc(item.sourceName || "YouTube channel")}</strong></span><button type="button" class="subscription-view" data-subscription-key="${esc(subscriptionKey(item))}">View Announcement <span class="subscription-view-arrow" aria-hidden="true">→</span></button><span class="subscription-actions"><small class="subscription-destination">#${esc(channelNames.get(item.destinationChannelId) || "unknown-channel")}</small><button type="button" class="subscription-remove" aria-label="Remove this YouTube notification" title="Remove notification" data-youtube-channel-id="${esc(item.youtubeChannelId)}" data-destination-channel-id="${esc(item.destinationChannelId)}"><span aria-hidden="true">🗑︎</span></button></span></div>`).join("") : '<p class="hint">No channels are being watched yet.</p>';
   document.querySelectorAll("#subscriptions .subscription-view").forEach((button) => { button.onclick = () => { const subscription = settings.youtubeSubscriptions.find((item) => subscriptionKey(item) === button.dataset.subscriptionKey); if (subscription) openAnnouncementModal(subscription, button); }; });
@@ -641,16 +642,18 @@ $("#bot-access-form").onsubmit = async (event) => {
   try {
     const data = await api(`/api/guild/${guildId}/bot-access`, {
       method: "PUT",
-      body: JSON.stringify({ channelIds: [...botAccessSelections.channels], autoChannelIds: [...botAccessSelections.auto], roleIds: [...botAccessSelections.roles] }),
+      body: JSON.stringify({ channelIds: [...botAccessSelections.channels], autoChannelIds: [...botAccessSelections.auto], roleIds: [...botAccessSelections.roles], dmEnabled: $("#bot-dm-enabled").checked }),
     });
     if (guildId !== selected) return;
     settings.botResponseChannelIds = data.channelIds;
     settings.botAutoResponseChannelIds = data.autoChannelIds;
     settings.botAccessRoleIds = data.roleIds;
+    settings.dmEnabled = data.dmEnabled;
     updateSaveButtons();
     toast("Bot access saved.");
   } catch (error) { toast(error.message || "Could not save bot access."); }
 };
+$("#bot-dm-enabled").onchange = updateSaveButtons;
 $("#youtube-form").onsubmit = async (event) => { event.preventDefault(); if (!event.target.destination.value) return toast("Select an announcement channel first."); const data = await api(`/api/guild/${selected}/youtube`, { method: "POST", body: JSON.stringify({ source: event.target.source.value, destinationChannelId: event.target.destination.value, announcementTemplate: event.target.announcementTemplate.value }) }); event.target.reset(); toast(`${data.name} is now being watched.`); loadSettings(); };
 $("#announcement-editor").oninput = (event) => { $("#announcement-save").hidden = event.target.value === announcementModalState.initialValue; updateSaveButtons(); };
 $("#announcement-close").onclick = closeAnnouncementModal;

@@ -32,6 +32,7 @@ const { DashboardSync } = require("./dashboard-sync");
 const { ensureParentDirectory } = require("./storage");
 const { shouldAutoRespond } = require("./bot-response");
 const { loadThreadContext, ThreadQueue } = require('./thread-context');
+const { DmRouter } = require('./dm-routing');
 const threadQueue = new ThreadQueue();
 
 if (!config.discordToken) {
@@ -49,6 +50,7 @@ const client = new Client({
 });
 
 const guildSettings = new GuildSettingsStore(config);
+const dmRouter = new DmRouter(client, guildSettings);
 const guildSecrets = new GuildSecretsStore(config);
 const ai = new AiChat(config);
 const knowledge = new KnowledgeBase(config, guildSettings);
@@ -72,7 +74,7 @@ const dashboardSync = new DashboardSync({ config, guildSettings, guildSecrets, k
 const chatCommand = new SlashCommandBuilder()
   .setName("chat")
   .setDescription("Chat with the AI")
-  .setDMPermission(true)
+  .setDMPermission(false)
   .addStringOption((option) =>
     option
       .setName("message")
@@ -311,8 +313,6 @@ const serverCommands = [
     ),
 ].map((command) => command.toJSON());
 
-const directMessageCommands = [chatCommand.toJSON()];
-
 function splitMessage(text, maximumLength = 1_900) {
   const chunks = [];
   let remaining = String(text || "");
@@ -381,13 +381,13 @@ function canUseBotInGuild({ guildId, channelId, parentChannelId, member }) {
   return memberRoleIds.some((roleId) => allowedRoles.includes(roleId));
 }
 
-async function requestAiResponse({ guildId, userId, text, channelId, messageId }) {
+async function requestAiResponse({ guildId, userId, text, channelId, messageId, dmChannelId }) {
   const settings = getSettingsForGuild(guildId);
   const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
   const apiKey = guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "";
-  const destination = guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
+  const destination = channelId === 'dm' ? { id: 'dm', isServerDm: true, isThread: () => false } : guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
   const policy = effectivePolicy(settings.knowledgePolicy, destination);
-  const threadConversation = await loadThreadContext({client,channel:destination,userId,messageId});
+  const threadConversation = channelId === 'dm' ? null : await loadThreadContext({client,channel:destination,userId,messageId});
   let prepared;
   if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || knowledge.checkpoint(`patreon:${guildId}`)?.generation || filesKnowledge.has(guildId) || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
@@ -407,7 +407,7 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId }
     personality: settings.personality,
     rules: settings.rules,
     responseLimit: settings.aiResponsesPerHour,
-    conversationId: channelId,
+    conversationId: dmChannelId || channelId,
     context: prepared?.context || (threadConversation ? JSON.stringify({threadConversation}) : ''),
     forgetHistory: Boolean(prepared || threadConversation),
     reserved: Boolean(prepared),
@@ -426,6 +426,10 @@ async function handleChatInteraction(interaction) {
 }
 
 async function handleChatInteractionNow(interaction) {
+  if (!interaction.guildId) {
+    await interaction.reply({ content: 'Just send me a direct message. /chat is only used in servers.', ephemeral: true });
+    return;
+  }
   const text = interaction.options.getString("message", true).trim();
   if (!canUseBotInGuild({ guildId: interaction.guildId, channelId: interaction.channelId, parentChannelId: interaction.channel?.parentId, member: interaction.member })) {
     if (interaction.deferred) await interaction.editReply({content:"You do not have access to chat with the bot in this channel."});
@@ -1064,6 +1068,48 @@ async function handleTextChatNow(message, text) {
   }
 }
 
+const dmPending = new Map();
+function handleDirectMessage(message) {
+  const key = message.author.id;
+  const run = (dmPending.get(key) || Promise.resolve()).catch(() => {}).then(() => handleDirectMessageNow(message)).catch(async error => {
+    console.error('Direct-message handling failed:', error.message);
+    await message.channel.send({ content: 'I could not verify server access right now. Please try again in a moment.', allowedMentions: { parse: [] } }).catch(() => {});
+  });
+  dmPending.set(key, run);
+  const cleanup = () => { if (dmPending.get(key) === run) dmPending.delete(key); };
+  run.then(cleanup, cleanup);
+  return run;
+}
+async function handleDirectMessageNow(message) {
+  const text = message.content.trim();
+  if (!text) { await message.channel.send({ content: 'Send me a message to start a conversation.', allowedMentions: { parse: [] } }); return; }
+  const route = await dmRouter.resolve(message.author.id, text);
+  if (route.status === 'unavailable') { await message.channel.send({ content: 'DMs are not enabled for any server where I can verify your membership and bot access.', allowedMentions: { parse: [] } }); return; }
+  if (route.status === 'choose') {
+    await sendMessageChunks(message.channel, 'Which server should this DM use? Reply with its number. Its selected AI provider and API key will be used.\n' + route.guilds.map((name, index) => `${index + 1}. ${name.replace(/[\r\n]/g, ' ')}`).join('\n'));
+    return;
+  }
+  if (!route.text) { await message.channel.send({ content: 'Server selected. Send me your question, or say “change server” to choose another.', allowedMentions: { parse: [] } }); return; }
+  const settings = guildSettings.get(route.guildId), provider = settings.aiProvider === 'openai' ? 'OpenAI' : 'Gemini';
+  if (!(provider === 'OpenAI' ? guildSecrets.getOpenAiKey(route.guildId) : guildSecrets.getGeminiKey(route.guildId))) {
+    await message.channel.send({ content: `DM responses are not available for this server yet: its selected ${provider} API key has not been configured.`, allowedMentions: { parse: [] } });
+    return;
+  }
+  const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
+  message.channel.sendTyping().catch(() => {});
+  try {
+    const response = await requestAiResponse({ guildId: route.guildId, userId: message.author.id, channelId: 'dm', dmChannelId: message.channelId, messageId: message.id, text: route.text });
+    if (!(await dmRouter.eligible(message.author.id)).some(item => item.guild.id === route.guildId)) {
+      await message.channel.send({ content: 'I can no longer verify DM access for that server. Please try again after confirming your membership.', allowedMentions: { parse: [] } });
+      return;
+    }
+    await sendMessageChunks(message.channel, response);
+  } catch (error) {
+    console.error('Server-linked DM failed:', error.message);
+    await message.channel.send({ content: aiErrorMessage(error), allowedMentions: { parse: [] } });
+  } finally { clearInterval(typing); }
+}
+
 async function registerGuildCommands(guild) {
   await guild.commands.set(serverCommands);
   console.log("Registered server commands for " + guild.name + ".");
@@ -1072,8 +1118,8 @@ async function registerGuildCommands(guild) {
 client.once(Events.ClientReady, (readyClient) => {
   (async () => {
     console.log("Logged in as " + readyClient.user.tag);
-    await readyClient.application.commands.set(directMessageCommands);
-    console.log("Registered " + directMessageCommands.length + " global DM command.");
+    await readyClient.application.commands.set([]);
+    console.log("Removed the duplicate global /chat command; /chat remains available in servers.");
     const results = await Promise.allSettled(
       [...client.guilds.cache.values()].map((guild) => registerGuildCommands(guild)),
     );
@@ -1111,7 +1157,7 @@ client.on(Events.MessageCreate, (message) => {
   if (knowledge.upsert(message)) knowledge.save();
   if (message.author.bot || message.webhookId || message.mentions.everyone) return;
   if (!message.guildId) {
-    handleTextChat(message, message.content.trim()).catch((error) =>
+    handleDirectMessage(message).catch((error) =>
       console.error("Direct-message handling failed:", error.message),
     );
     return;
