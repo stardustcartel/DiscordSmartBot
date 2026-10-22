@@ -48,8 +48,12 @@ bot needs the Change Nickname permission to set the server nickname.
 - /update role: generic role assignment for members with Manage Roles
 - /restart: restricted to service-owner Discord IDs in BOT_OWNER_IDS
 
-AI requests are available in servers only, because each provider key is tied to
-one server. Direct messages cannot be safely attributed to a customer's key.
+Server-linked DMs are available when a server manager enables them in Customize Bot.
+The bot verifies membership and configured role access, asks the user to select a
+server when more than one qualifies, and uses that server's AI key, behavior, and
+knowledge policies. DM replies identify the selected server and its configured
+bot nickname and avatar; Discord's DM conversation header still uses the bot's
+global profile.
 
 ## Oracle deployment
 

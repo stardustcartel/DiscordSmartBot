@@ -33,6 +33,7 @@ const { ensureParentDirectory } = require("./storage");
 const { shouldAutoRespond } = require("./bot-response");
 const { loadThreadContext, ThreadQueue } = require('./thread-context');
 const { DmRouter } = require('./dm-routing');
+const { dmIdentity, dmEmbed } = require('./dm-presentation');
 const threadQueue = new ThreadQueue();
 
 if (!config.discordToken) {
@@ -1086,13 +1087,23 @@ async function handleDirectMessageNow(message) {
   const route = await dmRouter.resolve(message.author.id, text);
   if (route.status === 'unavailable') { await message.channel.send({ content: 'DMs are not enabled for any server where I can verify your membership and bot access.', allowedMentions: { parse: [] } }); return; }
   if (route.status === 'choose') {
-    await sendMessageChunks(message.channel, 'Which server should this DM use? Reply with its number. Its selected AI provider and API key will be used.\n' + route.guilds.map((name, index) => `${index + 1}. ${name.replace(/[\r\n]/g, ' ')}`).join('\n'));
+    await sendMessageChunks(message.channel, 'Which server should this DM use? Reply with its number. I will answer as that server’s configured bot, using its AI and behavior settings.\n' + route.guilds.map((name, index) => {
+      const guild = client.guilds.cache.get(route.guildIds[index]);
+      const botName = dmIdentity(guild, guildSettings.get(guild.id), client.user).name;
+      return `${index + 1}. ${name.replace(/[\r\n]/g, ' ')} — ${botName.replace(/[\r\n]/g, ' ')}`;
+    }).join('\n'));
     return;
   }
-  if (!route.text) { await message.channel.send({ content: 'Server selected. Send me your question, or say “change server” to choose another.', allowedMentions: { parse: [] } }); return; }
-  const settings = guildSettings.get(route.guildId), provider = settings.aiProvider === 'openai' ? 'OpenAI' : 'Gemini';
+  const guild = client.guilds.cache.get(route.guildId);
+  const settings = guildSettings.get(route.guildId);
+  const identity = dmIdentity(guild, settings, client.user);
+  if (!route.text) {
+    await message.channel.send({ embeds: [dmEmbed(identity, 'Server selected. Send me your question, or say “change server” to choose another.')], allowedMentions: { parse: [] } });
+    return;
+  }
+  const provider = settings.aiProvider === 'openai' ? 'OpenAI' : 'Gemini';
   if (!(provider === 'OpenAI' ? guildSecrets.getOpenAiKey(route.guildId) : guildSecrets.getGeminiKey(route.guildId))) {
-    await message.channel.send({ content: `DM responses are not available for this server yet: its selected ${provider} API key has not been configured.`, allowedMentions: { parse: [] } });
+    await message.channel.send({ embeds: [dmEmbed(identity, `DM responses are not available for this server yet: its selected ${provider} API key has not been configured.`)], allowedMentions: { parse: [] } });
     return;
   }
   const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
@@ -1100,13 +1111,15 @@ async function handleDirectMessageNow(message) {
   try {
     const response = await requestAiResponse({ guildId: route.guildId, userId: message.author.id, channelId: 'dm', dmChannelId: message.channelId, messageId: message.id, text: route.text });
     if (!(await dmRouter.eligible(message.author.id)).some(item => item.guild.id === route.guildId)) {
-      await message.channel.send({ content: 'I can no longer verify DM access for that server. Please try again after confirming your membership.', allowedMentions: { parse: [] } });
+      await message.channel.send({ embeds: [dmEmbed(identity, 'I can no longer verify DM access for that server. Please try again after confirming your membership.')], allowedMentions: { parse: [] } });
       return;
     }
-    await sendMessageChunks(message.channel, response);
+    for (const chunk of splitMessage(response)) {
+      await message.channel.send({ embeds: [dmEmbed(identity, chunk)], allowedMentions: { parse: [] } });
+    }
   } catch (error) {
     console.error('Server-linked DM failed:', error.message);
-    await message.channel.send({ content: aiErrorMessage(error), allowedMentions: { parse: [] } });
+    await message.channel.send({ embeds: [dmEmbed(identity, aiErrorMessage(error))], allowedMentions: { parse: [] } });
   } finally { clearInterval(typing); }
 }
 

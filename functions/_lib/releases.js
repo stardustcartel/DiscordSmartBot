@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.1", at: "2026-10-22T02:50:06Z", historical: false, changes: [
+    "Direct-message answers now show which server they use and the bot's configured server name, with the server-specific bot avatar and server icon where available.",
+    "Server selection lists each bot's server name. Answers still use that server's AI, behavior, and knowledge settings."
+  ] },
   { version: "2.6.0", at: "2026-10-22T02:31:42Z", historical: false, changes: [
     "Removed the duplicate DM /chat command; /chat remains available inside servers.",
     "Added optional server-linked direct messages with membership, role-access, and server-selection checks. Each conversation uses the selected server's AI provider and API key.",

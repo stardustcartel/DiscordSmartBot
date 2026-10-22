@@ -32,7 +32,7 @@ class DmRouter {
     const selected = this.selections.get(userId);
     if (selected?.explicit && eligible.some(item => item.guild.id === selected.id)) return { status: 'ready', guildId: selected.id, text };
     this.pending.set(userId, { ids: eligible.map(item => item.guild.id), text: switching ? '' : text, at: Date.now() });
-    return { status: 'choose', guilds: eligible.map(item => item.guild.name) };
+    return { status: 'choose', guilds: eligible.map(item => item.guild.name), guildIds: eligible.map(item => item.guild.id) };
   }
 }
 module.exports = { DmRouter };
