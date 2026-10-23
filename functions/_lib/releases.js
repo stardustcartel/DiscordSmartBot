@@ -2,6 +2,9 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.6.5", at: "2026-10-23T00:06:31Z", historical: false, changes: [
+    "Added a note below the OpenAI model selector explaining the model order and linking to OpenAI's model pricing comparison."
+  ] },
   { version: "2.6.4", at: "2026-10-22T23:05:42Z", historical: false, changes: [
     "Fixed DM server switching for numbered replies with punctuation, ordinal replies, and pasted server names. Invalid selections now keep the original question while the server chooser stays open.",
     "Natural requests to switch servers open the chooser directly, without using an AI request."
