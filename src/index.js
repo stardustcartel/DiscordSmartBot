@@ -34,6 +34,7 @@ const { shouldAutoRespond } = require("./bot-response");
 const { loadThreadContext, ThreadQueue } = require('./thread-context');
 const { DmRouter } = require('./dm-routing');
 const { dmIdentity, dmEmbed } = require('./dm-presentation');
+const { timed } = require('./workflow-utils');
 const threadQueue = new ThreadQueue();
 
 if (!config.discordToken) {
@@ -383,21 +384,28 @@ function canUseBotInGuild({ guildId, channelId, parentChannelId, member }) {
   return memberRoleIds.some((roleId) => allowedRoles.includes(roleId));
 }
 
-async function requestAiResponse({ guildId, userId, text, channelId, messageId, dmChannelId }) {
+async function requestAiResponse({ guildId, userId, text, channelId, messageId, dmChannelId, timing = {} }) {
+  const started = Date.now();
+  Object.assign(timing, { started, at: new Date(started).toISOString(), event: 'response_timing', guildId, channelId, userId, requestMessageId: messageId || null, stages: {} });
+  if (/^\d{15,25}$/.test(messageId || '')) timing.queueAndRoutingMs = started - Number((BigInt(messageId) >> 22n) + 1420070400000n);
+  else if (Number.isFinite(timing.receivedAt)) timing.queueAndRoutingMs = started - timing.receivedAt;
+  try {
   const settings = getSettingsForGuild(guildId);
   const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
+  Object.assign(timing, { provider, model: provider === 'openai' ? settings.openAiModel : null, speed: settings.openAiSpeed, reasoning: settings.openAiReasoning });
   const apiKey = guildId ? (provider === "openai" ? guildSecrets.getOpenAiKey(guildId) : guildSecrets.getGeminiKey(guildId)) : "";
   const destination = channelId === 'dm' ? { id: 'dm', isServerDm: true, isThread: () => false } : guildId && channelId ? await client.guilds.cache.get(guildId)?.channels.fetch(channelId) : null;
   const policy = effectivePolicy(settings.knowledgePolicy, destination);
-  const threadConversation = channelId === 'dm' ? null : await loadThreadContext({client,channel:destination,userId,messageId});
+  const threadConversation = channelId === 'dm' ? null : await timed(timing.stages, 'threadContextMs', () => loadThreadContext({client,channel:destination,userId,messageId}));
   let prepared;
   if (apiKey && guildId && channelId && !directClockAnswer(text) && (settings.knowledgeChannelIds.length || settings.approvedAnswers.length || knowledge.checkpoint(`patreon:${guildId}`)?.generation || filesKnowledge.has(guildId) || policy.knowledgeOnly || policy.requireCitations)) {
     if (!ai.reserveResponse(guildId, userId, settings.aiResponsesPerHour)) {
       const error = new Error("AI response rate limit reached"); error.code = "AI_RATE_LIMITED"; throw error;
     }
-    prepared = await knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId, behavior: settings, threadConversation });
+    prepared = await timed(timing.stages, 'retrievalMs', () => knowledgeRetrieval.prepare({ client, guildId, channelId, userId, text, messageId, behavior: settings, threadConversation }));
+    timing.searchTraceId = prepared.traceId;
   }
-  const response = await ai.respond({
+  const response = await timed(timing.stages, 'draftMs', () => ai.respond({
     apiKey,
     provider,
     model: settings.openAiModel,
@@ -414,8 +422,20 @@ async function requestAiResponse({ guildId, userId, text, channelId, messageId, 
     forgetHistory: Boolean(prepared || threadConversation),
     reserved: Boolean(prepared),
     knowledgePolicy: policy,
-  });
-  return prepared ? knowledgeRetrieval.finish({ client, guildId, channelId, userId, answer: response, prepared, policy }) : response;
+  }));
+  const result = prepared ? await timed(timing.stages, 'answerCheckMs', () => knowledgeRetrieval.finish({ client, guildId, channelId, userId, answer: response, prepared, policy })) : response;
+  timing.status = 'complete';
+  return result;
+  } catch (error) { timing.status = 'failed'; timing.errorCode = String(error.code || error.name); throw error; }
+  finally { timing.processingMs = Date.now() - started; }
+}
+
+function saveResponseTiming(timing) {
+  if (!timing.started) return;
+  const { started, ...entry } = timing;
+  entry.durationMs = Date.now() - started;
+  entry.elapsedSinceMessageMs = entry.queueAndRoutingMs === undefined ? undefined : entry.queueAndRoutingMs + entry.durationMs;
+  knowledgeRetrieval.writeTrace(entry.guildId, entry);
 }
 
 async function handleChatInteraction(interaction) {
@@ -439,13 +459,16 @@ async function handleChatInteractionNow(interaction) {
     return;
   }
   if (!interaction.deferred) await interaction.deferReply();
+  const timing = { receivedAt: interaction.createdTimestamp };
   try {
     const response = await requestAiResponse({
       guildId: interaction.guildId,
       userId: interaction.user.id,
       channelId: interaction.channelId,
       text,
+      timing,
     });
+    const deliveryStarted = Date.now();
     const chunks = splitMessage(response);
     await interaction.editReply({
       content: chunks.shift() || "The AI provider returned an empty response.",
@@ -457,12 +480,16 @@ async function handleChatInteractionNow(interaction) {
         allowedMentions: { parse: [] },
       });
     }
+    timing.stages.deliveryMs = Date.now() - deliveryStarted;
   } catch (error) {
+    if (timing.status === 'complete') timing.status = 'delivery_failed';
     console.error("Chat command failed:", error.message);
     await interaction.editReply({
       content: aiErrorMessage(error),
       allowedMentions: { parse: [] },
     });
+  } finally {
+    saveResponseTiming(timing);
   }
 }
 
@@ -1050,6 +1077,7 @@ async function handleTextChatNow(message, text) {
   }
   const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
   message.channel.sendTyping().catch(() => {});
+  const timing = {};
   try {
     const response = await requestAiResponse({
       guildId: message.guildId,
@@ -1057,9 +1085,13 @@ async function handleTextChatNow(message, text) {
       channelId: message.channelId,
       messageId: message.id,
       text,
+      timing,
     });
+    const deliveryStarted = Date.now();
     await sendMessageChunks(message.channel, response, message);
+    timing.stages.deliveryMs = Date.now() - deliveryStarted;
   } catch (error) {
+    if (timing.status === 'complete') timing.status = 'delivery_failed';
     console.error("Message chat failed:", error.message);
     await message.reply({
       content: aiErrorMessage(error),
@@ -1067,6 +1099,7 @@ async function handleTextChatNow(message, text) {
     });
   } finally {
     clearInterval(typing);
+    saveResponseTiming(timing);
   }
 }
 
@@ -1109,19 +1142,24 @@ async function handleDirectMessageNow(message) {
   }
   const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
   message.channel.sendTyping().catch(() => {});
+  const timing = {};
   try {
-    const response = await requestAiResponse({ guildId: route.guildId, userId: message.author.id, channelId: 'dm', dmChannelId: message.channelId, messageId: message.id, text: route.text });
-    if (!(await dmRouter.eligible(message.author.id)).some(item => item.guild.id === route.guildId)) {
+    const response = await requestAiResponse({ guildId: route.guildId, userId: message.author.id, channelId: 'dm', dmChannelId: message.channelId, messageId: message.id, text: route.text, timing });
+    if (!(await timed(timing.stages, 'dmAccessBeforeSendMs', () => dmRouter.eligible(message.author.id))).some(item => item.guild.id === route.guildId)) {
+      timing.status = 'access_changed';
       await message.channel.send({ embeds: [dmEmbed(identity, 'I can no longer verify DM access for that server. Please try again after confirming your membership.')], allowedMentions: { parse: [] } });
       return;
     }
+    const deliveryStarted = Date.now();
     for (const chunk of splitMessage(response)) {
       await message.channel.send({ embeds: [dmEmbed(identity, chunk)], allowedMentions: { parse: [] } });
     }
+    timing.stages.deliveryMs = Date.now() - deliveryStarted;
   } catch (error) {
+    if (timing.status === 'complete') timing.status = 'delivery_failed';
     console.error('Server-linked DM failed:', error.message);
     await message.channel.send({ embeds: [dmEmbed(identity, aiErrorMessage(error))], allowedMentions: { parse: [] } });
-  } finally { clearInterval(typing); }
+  } finally { clearInterval(typing); saveResponseTiming(timing); }
 }
 
 async function registerGuildCommands(guild) {

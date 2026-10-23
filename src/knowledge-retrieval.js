@@ -8,6 +8,8 @@ const { normalizePolicy, inspectEvidenceReview, evidenceReviewFormat, reviewInst
 const { behaviorSnapshot, normalizeApprovedAnswers, safeResourceUrl } = require("../shared/behavior.mjs");
 const { ThreadResearch } = require('./thread-context');
 const { knowledgeText } = require('./knowledge-message');
+const { readGroupWindows, sortedIds } = require('./knowledge-live');
+const { timed } = require('./workflow-utils');
 
 function mergeRankings(lists) {
   const merged = new Map();
@@ -78,14 +80,15 @@ class KnowledgeRetrieval {
     const allowedIds = this.store.db.prepare("SELECT DISTINCT channelId,rootId FROM messages WHERE guildId=?").all(guildId).filter((row) => safeRoots.has(row.rootId)).map((row) => row.channelId);
     return { guild, member, bot, destination, safeRoots, allowedIds, decisions, verifiedMembers };
   }
-  async validate(client, access, messages, { refreshMessages = true } = {}) {
-    const channels = new Map();
+  async validate(client, access, messages, { refreshMessages = true, channels = new Map() } = {}) {
     const selected = this.store.guildSettings.get(access.guild.id).knowledgeChannelIds;
     const valid = [];
     const patreonSources = messages.filter(source => source.sourceType === "patreon");
-    const validPatreon = this.patreon ? await this.patreon.validate(access.guild.id, access.destination, patreonSources) : [];
     const fileSources = messages.filter(source => source.sourceType === "file");
-    const validFiles = this.filesKnowledge ? await this.filesKnowledge.validate(access.guild.id, access.destination, fileSources) : [];
+    const [validPatreon, validFiles] = await Promise.all([
+      this.patreon ? this.patreon.validate(access.guild.id, access.destination, patreonSources) : [],
+      this.filesKnowledge ? this.filesKnowledge.validate(access.guild.id, access.destination, fileSources) : [],
+    ]);
     const check = async (stored) => {
       if (stored.sourceType === "patreon") return validPatreon.find(source => source.id === stored.id) || null;
       if (stored.sourceType === "file") return validFiles.find(source => source.id === stored.id) || null;
@@ -112,51 +115,67 @@ class KnowledgeRetrieval {
     return valid;
   }
   async validateGroups(client, access, groups, { refreshMessages = true, trace } = {}) {
-    const valid = [];
+    const started = Date.now(), valid = [], channels = new Map(), stats = {};
     if (trace) trace.liveGroupChecks = [];
     const allMembers = [...new Map(groups.flatMap((g) => g.members).map((m) => [m.id, m])).values()];
-    const permittedIds = new Set((await this.validate(client, access, allMembers, { refreshMessages: false })).map((m) => m.id));
+    const permittedIds = new Set((await this.validate(client, access, allMembers, { refreshMessages: false, channels })).map((m) => m.id));
+    const eligible = groups.filter(group => group.members.every(m => permittedIds.has(m.id)));
+    if (!refreshMessages) {
+      if (trace) {
+        trace.liveGroupChecks = groups.map(g => ({ groupId: g.id, archivedMemberIds: g.memberIds, status: eligible.includes(g) ? 'accepted' : 'rejected', reason: eligible.includes(g) ? undefined : 'source_access_changed' }));
+        trace.liveGroupTiming = { groups: groups.length, historyRequests: 0, durationMs: Date.now() - started };
+      }
+      return eligible;
+    }
+    const getChannel = id => {
+      if (!channels.has(id)) channels.set(id, access.guild.channels.fetch(id, { force: true }));
+      return channels.get(id);
+    };
+    const windows = await readGroupWindows(eligible, getChannel, stats);
+    // Apply each downloaded window once, including excluded-message boundaries.
+    // Rebuild derived groups after all windows are applied, not once per group.
+    const batches = new Map();
+    for (const group of eligible) {
+      const window = windows.get(group.id)?.window;
+      if (!window) continue;
+      if (!batches.has(window)) batches.set(window, []);
+      batches.get(window).push(group);
+    }
+    for (const [window, members] of batches) {
+      try {
+        this.store.transaction(() => {
+          for (const message of window.batch.values()) this.store.upsert(message);
+          const ids = sortedIds(window.batch);
+          if (ids.length) for (const group of members) for (const member of group.members) {
+            if (BigInt(member.id) >= BigInt(ids[0]) && BigInt(member.id) <= BigInt(ids.at(-1)) && !window.batch.has(member.id)) this.store.remove(member);
+          }
+        });
+      } catch (error) { for (const group of members) windows.set(group.id, { error }); }
+    }
     for (const group of groups) {
       const entry = { groupId: group.id, archivedMemberIds: group.memberIds, status: "rejected" };
       try {
         if (group.members.some((m) => !permittedIds.has(m.id))) { entry.reason = "source_access_changed"; continue; }
-        if (!refreshMessages) { valid.push(group); continue; }
-        const channel = await access.guild.channels.fetch(group.channelId, { force: true });
-        // Older archives omitted bots and empty messages. Check the actual sequence.
-        const batch = await channel.messages.fetch({ around: group.id, limit: 100, cache: false });
-        let beforeComplete = batch.size < 100, afterComplete = batch.size < 100;
-        if (batch.size === 100) {
-          const ids = [...batch.keys()].sort((a, b) => BigInt(a) < BigInt(b) ? -1 : 1);
-          if (group.memberIds.includes(ids[0])) {
-            const before = await channel.messages.fetch({ before: ids[0], limit: 10, cache: false });
-            beforeComplete = before.size < 10;
-            for (const [id, message] of before) batch.set(id, message);
-          }
-          if (group.memberIds.includes(ids.at(-1))) {
-            const after = await channel.messages.fetch({ after: ids.at(-1), limit: 10, cache: false });
-            afterComplete = after.size < 10;
-            for (const [id, message] of after) batch.set(id, message);
-          }
-        }
-        this.store.transaction(() => {
-          for (const message of batch.values()) this.store.upsert(message);
-          const ids = [...batch.keys()].sort((a, b) => BigInt(a) < BigInt(b) ? -1 : 1);
-          if (ids.length) for (const member of group.members) {
-            if (BigInt(member.id) >= BigInt(ids[0]) && BigInt(member.id) <= BigInt(ids.at(-1)) && !batch.has(member.id)) this.store.remove(member);
-          }
-        });
+        const result = windows.get(group.id);
+        if (result?.error) throw result.error;
+        const { batch, beforeComplete, afterComplete } = result.window;
         const current = this.store.groups.forMessage(group);
         if (!current || !batch.has(group.id) || current.memberIds.some((id) => !batch.has(id))) { entry.reason = "group_not_fully_available"; continue; }
         const ordered = [...batch.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
         if ((!beforeComplete && current.memberIds.includes(ordered[0].id)) || (!afterComplete && current.memberIds.includes(ordered.at(-1).id))) { entry.reason = "history_window_boundary"; continue; }
-        const checked = await this.validate(client, access, current.members, { refreshMessages: false });
-        if (checked.length !== current.members.length) { entry.reason = "source_access_changed"; continue; }
         valid.push(current);
         Object.assign(entry, { status: "accepted", currentMemberIds: current.memberIds, membershipChanged: JSON.stringify(current.memberIds) !== JSON.stringify(group.memberIds), contentChanged: current.fingerprint !== group.fingerprint });
       } catch (error) { entry.reason = "live_group_check_failed"; entry.error = errorDetails(error, { stage: "live_group_check" }); }
       finally { if (trace) trace.liveGroupChecks.push(entry); }
     }
-    return valid;
+    // Fresh channel checks after all history reads also cover new continuations.
+    const checked = new Set((await this.validate(client, access, [...new Map(valid.flatMap(g => g.members).map(m => [m.id, m])).values()], { refreshMessages: false })).map(m => m.id));
+    const final = valid.filter(group => group.members.every(member => checked.has(member.id)));
+    if (trace) {
+      for (const entry of trace.liveGroupChecks) if (entry.status === 'accepted' && !final.some(g => g.id === entry.groupId)) Object.assign(entry, { status: 'rejected', reason: 'source_access_changed' });
+      trace.liveGroupTiming = { ...stats, groups: groups.length, durationMs: Date.now() - started };
+    }
+    return final;
   }
   groupsUnchanged(sources) {
     const checked = new Set();
@@ -169,10 +188,10 @@ class KnowledgeRetrieval {
   async prepare({ client, guildId, channelId, userId, text, messageId, behavior, threadConversation = null }) {
     const started = Date.now();
     const trace = { id: randomUUID(), at: new Date().toISOString(), guildId, channelId, userId,
-      requestMessageId: messageId || null, question: text, status: "started" };
+      requestMessageId: messageId || null, question: text, status: "started", timings: {} };
     try {
     const savedBehavior = behaviorSnapshot(behavior || this.store.guildSettings.get(guildId));
-    const access = await this.access(client, guildId, channelId, userId);
+    const access = await timed(trace.timings, 'initialAccessMs', () => this.access(client, guildId, channelId, userId));
     const rootId = access.destination.isThread() ? access.destination.parentId : channelId;
     const selected = this.store.guildSettings.get(guildId).knowledgeChannelIds;
     trace.scope = {
@@ -180,6 +199,7 @@ class KnowledgeRetrieval {
       selectedRoots: selected.map((id) => ({ id, name: access.guild.channels.cache.get(id)?.name || null, readableHere: access.safeRoots.has(id), ...access.decisions.get(id) })),
       refreshedChannels: [],
     };
+    const refreshStarted = Date.now();
     if (!access.destination.isServerDm && access.safeRoots.has(rootId)) {
       try { const indexing = await this.indexer.scan(access.destination, true); trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "ok", indexing }); }
       catch (error) { trace.scope.refreshedChannels.push({ id: channelId, name: access.destination.name, status: "failed", reason: error.code || error.name }); }
@@ -190,7 +210,8 @@ class KnowledgeRetrieval {
       try { const indexing = await this.indexer.scan(c, true); trace.scope.refreshedChannels.push({ id: c.id, name: c.name, status: "ok", indexing }); }
       catch (error) { trace.scope.refreshedChannels.push({ id: c.id, name: c.name, status: "failed", reason: error.code || error.name }); }
     }));
-    const refreshed = await this.access(client, guildId, channelId, userId);
+    trace.timings.channelRefreshMs = Date.now() - refreshStarted;
+    const refreshed = await timed(trace.timings, 'refreshedAccessMs', () => this.access(client, guildId, channelId, userId));
     trace.scope.indexedSourceCounts = this.store.db.prepare('SELECT channelId,sourceType,count(*) AS count FROM messages WHERE guildId=? AND channelId IN (SELECT value FROM json_each(?)) GROUP BY channelId,sourceType')
       .all(guildId, JSON.stringify(refreshed.allowedIds));
     trace.scope.searchedChannels = [...new Set(refreshed.allowedIds)].map((id) => ({ id, name: refreshed.guild.channels.cache.get(id)?.name || this.store.db.prepare("SELECT channelName FROM messages WHERE guildId=? AND channelId=? LIMIT 1").get(guildId, id)?.channelName || null }));
@@ -202,18 +223,22 @@ class KnowledgeRetrieval {
     const research = threadConversation?.status==='ready' ? this.research.load(refreshed) : null;
     let cachedCharacters=0;
     const cached = (research?.groups || []).slice(0,24).filter(g=>refreshed.allowedIds.includes(g.channelId)).map(g=>this.store.groups.forMessage({ ...g,guildId })).filter(g=>{if(!g || cachedCharacters+g.content.length>32000)return false;cachedCharacters+=g.content.length;return true;});
-    const cachedGroups = cached.length ? await this.validateGroups(client,refreshed,cached) : [];
-    const cachedExternal = research?.external?.length ? await this.validate(client,refreshed,research.external) : [];
+    const cacheTrace = {};
+    const cachedGroups = cached.length ? await timed(trace.timings, 'cachedGroupsMs', () => this.validateGroups(client,refreshed,cached,{ trace:cacheTrace })) : [];
+    const cachedExternal = research?.external?.length ? await timed(trace.timings, 'cachedExternalMs', () => this.validate(client,refreshed,research.external)) : [];
     trace.threadConversation = threadConversation;
     trace.researchReuse = { eligible:this.research.enabled(refreshed), previousTraceId:research?.traceId || null, cachedGroupIds:cached.map(g=>g.id), validatedGroupIds:cachedGroups.map(g=>g.id), validatedExternalIds:cachedExternal.map(s=>s.id), rejectedGroupIds:cached.filter(g=>!cachedGroups.some(v=>v.id===g.id)).map(g=>g.id) };
-    const archive = await searchKnowledge({ retrieval: this, client, access: refreshed, guildId, text, messageId, recentQuestions, trace, behavior: savedBehavior, threadConversation, research, cachedGroups, cachedExternal });
+    trace.researchReuse.validation = cacheTrace.liveGroupTiming;
+    const archive = await timed(trace.timings, 'archiveSearchMs', () => searchKnowledge({ retrieval: this, client, access: refreshed, guildId, text, messageId, recentQuestions, trace, behavior: savedBehavior, threadConversation, research, cachedGroups, cachedExternal }));
     trace.validatedMessageIds = archive.map((source) => source.id);
     const approved = savedBehavior.approvedAnswers.map((item) => ({ ...item, sourceType: "approved_answer", content: item.answer }));
     const resolvedQuestion = trace.followup?.resolvedQuestion || text;
     const mergeSources = (fresh,kind) => [...new Map([...cachedExternal.filter(s=>s.sourceType===kind),...fresh].map(s=>[s.id,s])).values()].slice(-6);
     const needsFreshExternal = trace.followup?.searchNeeded !== false || (trace.searchRounds || []).some(r=>r.review && !r.review.sufficient);
-    const patreon = this.patreon && !trace.structuredLookup ? mergeSources(needsFreshExternal ? await this.patreon.search(guildId, refreshed.destination, resolvedQuestion, trace) : [],'patreon') : [];
-    const documents = this.filesKnowledge && !trace.structuredLookup ? mergeSources(needsFreshExternal ? await this.filesKnowledge.search(guildId, refreshed.destination, resolvedQuestion, trace) : [],'file') : [];
+    const [patreon, documents] = await Promise.all([
+      this.patreon && !trace.structuredLookup ? timed(trace.timings, 'patreonSearchMs', async () => mergeSources(needsFreshExternal ? await this.patreon.search(guildId, refreshed.destination, resolvedQuestion, trace) : [],'patreon')) : [],
+      this.filesKnowledge && !trace.structuredLookup ? timed(trace.timings, 'documentSearchMs', async () => mergeSources(needsFreshExternal ? await this.filesKnowledge.search(guildId, refreshed.destination, resolvedQuestion, trace) : [],'file')) : [],
+    ]);
     trace.researchReuse.externalSearch = needsFreshExternal ? 'fresh_contextual_search' : 'reuse_validated_evidence';
     const sources = [...approved, ...patreon, ...documents, ...archive];
     trace.approvedAnswers = approved.map((item) => ({ id: item.id, question: item.question, updatedAt: item.updatedAt }));
@@ -268,7 +293,7 @@ class KnowledgeRetrieval {
     const credentials = this.indexer.credentials(guildId);
     const trace = { id: randomUUID(), searchTraceId: prepared.traceId || null, event: "answer_check", at: new Date().toISOString(), guildId, channelId, userId,
       question: prepared.question, threadMessageIds:prepared.threadConversation?.messages.map(m=>m.id) || [], followup:prepared.followup || null, provider: credentials.provider, model: credentials.provider === "openai" ? credentials.model : null,
-      requestedSpeed: settings.openAiSpeed, requestedReasoning: settings.openAiReasoning, policy, draft: answer, attempts: [], status: "started" };
+      requestedSpeed: settings.openAiSpeed, requestedReasoning: settings.openAiReasoning, policy, draft: answer, attempts: [], status: "started", timings: {} };
     try {
       const result = await this.finishChecked({ client, guildId, channelId, userId, answer, prepared, policy, trace });
       trace.finalAnswer = result;
@@ -282,8 +307,8 @@ class KnowledgeRetrieval {
     }
   }
   async finishChecked({ client, guildId, channelId, userId, answer, prepared, policy, trace }) {
-    const access = await this.access(client, guildId, channelId, userId);
-    const valid = await this.validate(client, access, prepared.sources);
+    const access = await timed(trace.timings, 'accessBeforeReviewMs', () => this.access(client, guildId, channelId, userId));
+    const valid = await timed(trace.timings, 'sourcesBeforeReviewMs', () => this.validate(client, access, prepared.sources));
     if (valid.length !== prepared.sources.length || valid.some((m, i) => m.content !== prepared.sources[i].content) || !this.groupsUnchanged(prepared.sources)) { trace.status = "sources_changed"; return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information."; }
     // A separate evidence review reduces unsupported leaps; code checks citations and exact quotes.
     // Fail closed on review failure, rather than publishing an unverified draft.
@@ -322,8 +347,8 @@ class KnowledgeRetrieval {
       if (validationFailure === "review_provider_error") break;
     }
     if (!checked) { trace.status = "rejected"; return "I couldn't complete the answer check right now. Please try again in a moment."; }
-    const finalAccess = await this.access(client, guildId, channelId, userId);
-    const finalSources = await this.validate(client, finalAccess, prepared.sources);
+    const finalAccess = await timed(trace.timings, 'accessBeforeSendMs', () => this.access(client, guildId, channelId, userId));
+    const finalSources = await timed(trace.timings, 'sourcesBeforeSendMs', () => this.validate(client, finalAccess, prepared.sources));
     if (finalSources.length !== prepared.sources.length || finalSources.some((m, i) => m.content !== prepared.sources[i].content) || !this.groupsUnchanged(prepared.sources)) { trace.status = "sources_changed"; return "The source messages or their permissions changed while I was answering. Please ask again so I can use the current information."; }
     trace.status = "accepted";
     trace.usedSources = [...new Set([...checked.matchAll(/\[S(\d+)\]/g)].map(m=>Number(m[1])-1))].map(i=>({citation:`S${i+1}`,sourceType:prepared.sources[i]?.sourceType || 'discord',id:prepared.sources[i]?.id}));

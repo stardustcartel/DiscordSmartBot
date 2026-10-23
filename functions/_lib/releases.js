@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.7.0", at: "2026-10-23T00:44:09Z", historical: false, changes: [
+    "Accelerated knowledge searches and follow-ups by sharing overlapping Discord history reads, processing independent channels concurrently, and avoiding repeated indexing of unchanged messages.",
+    "Reduced duplicate channel and document checks while retaining source freshness, permissions, citation checks, and conversation context. Gemini now temporarily prioritizes available models after rate limits or outages.",
+    "Added response timing logs covering retrieval, drafting, evidence checks, and Discord delivery. These workflow improvements do not add AI requests."
+  ] },
   { version: "2.6.5", at: "2026-10-23T00:06:31Z", historical: false, changes: [
     "Added a note below the OpenAI model selector explaining the model order and linking to OpenAI's model pricing comparison."
   ] },

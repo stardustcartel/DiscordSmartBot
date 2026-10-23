@@ -4,6 +4,7 @@ const {spawn}=require('node:child_process');
 const {createHash}=require('node:crypto');
 const {embed,modelFor}=require('./knowledge-embeddings');
 const {terms}=require('./knowledge');
+const {mapConcurrent}=require('./workflow-utils');
 const digest=text=>createHash('sha256').update(text).digest('hex');
 const allowed=(ids,channel)=>!ids.length || ids.includes(channel.id) || Boolean(channel.isThread?.() && ids.includes(channel.parentId));
 function sections(text) {
@@ -143,13 +144,15 @@ class FilesKnowledge {
   async validate(guildId,channel,sources) {
     if(!sources.length)return [];
     const meta=this.meta.get(guildId);if(!meta || !allowed(meta.channelIds,channel))return [];
-    const live=new Map(meta.files.map(f=>[f.id,f])),valid=[];
-    for(const source of sources) {
+    const live=new Map(meta.files.map(f=>[f.id,f])),checks=new Map();
+    const results=await mapConcurrent(sources,3,async source=>{
       const row=live.get(source.fileId);
-      if(!row || row.revision!==source.revision || row.sha256!==source.sha256 || row.state!=='ready')continue;
-      try {const check=await this.remote(guildId,{action:'validate',id:source.fileId,revision:source.revision,channelId:channel.id,parentId:channel.isThread?.()?channel.parentId:null});if(check.valid)valid.push(source);}catch{}
-    }
-    return valid;
+      if(!row || row.revision!==source.revision || row.sha256!==source.sha256 || row.state!=='ready')return null;
+      const key=JSON.stringify([source.fileId,source.revision]);
+      if(!checks.has(key))checks.set(key,this.remote(guildId,{action:'validate',id:source.fileId,revision:source.revision,channelId:channel.id,parentId:channel.isThread?.()?channel.parentId:null}).then(check=>Boolean(check.valid)).catch(()=>false));
+      return await checks.get(key)?source:null;
+    });
+    return results.filter(Boolean);
   }
 }
 module.exports={FilesKnowledge,sections};

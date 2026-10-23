@@ -146,7 +146,12 @@ class AiChat {
     const geminiConversation = conversation.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.text }] }));
     let response;
     let lastError;
-    const models = this.config.geminiModels || [this.config.geminiModel];
+    const configured = this.config.geminiModels || [this.config.geminiModel];
+    const now = Date.now();
+    const ready = configured.filter(model => this.geminiStatus.retryUntil(scopeId, apiKey, model) <= now);
+    // Preserve priority among available models. If those fail, still try the
+    // cooling models so stale observations cannot block a recovered provider.
+    const models = [...ready, ...configured.filter(model => !ready.includes(model))];
     for (const [index, model] of models.entries()) {
       onModelAttempt?.(model);
       try {
@@ -164,7 +169,7 @@ class AiChat {
         break;
       } catch (error) {
         lastError = error;
-        this.geminiStatus.observe(scopeId, apiKey, model, failureKind(error));
+        this.geminiStatus.observe(scopeId, apiKey, model, failureKind(error), error);
         if (index === models.length - 1 || !canTryNextModel(error)) throw error;
         console.warn(
           "Gemini model " + model + " failed; trying the next configured model.",

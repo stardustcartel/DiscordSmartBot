@@ -20,6 +20,16 @@ function failureKind(error) {
   return "error";
 }
 
+function retryDelay(error, outcome) {
+  if (outcome === 'success' || outcome === 'error') return 0;
+  const message = String(error?.message || '');
+  const header = error?.response?.headers?.get?.('retry-after');
+  const seconds = Number(header || /"retryDelay"\s*:\s*"([\d.]+)s"/.exec(message)?.[1] || /retry (?:in|after)\s+([\d.]+)s/i.exec(message)?.[1]);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(1800000, Math.max(1000, seconds * 1000));
+  if (errorStatus(error) === 404 || /daily|per.?day|requestsperday/i.test(message)) return 300000;
+  return outcome === 'limit' ? 60000 : 15000;
+}
+
 class GeminiModelStatus {
   constructor(dataDirectory) {
     this.filePath = dataDirectory ? path.join(dataDirectory, "gemini-model-status.json") : null;
@@ -35,11 +45,11 @@ class GeminiModelStatus {
     return current?.fingerprint === this.fingerprint(apiKey) ? current : null;
   }
 
-  observe(guildId, apiKey, model, outcome) {
+  observe(guildId, apiKey, model, outcome, error = null) {
     if (!guildId || !/^\d{15,25}$/.test(guildId) || !apiKey || !model) return;
     const previous = this.state(guildId, apiKey);
     const now = Date.now();
-    const entry = { outcome, observedAt: now };
+    const entry = { outcome, observedAt: now, retryUntil: now + retryDelay(error, outcome) };
     this.data.guilds[guildId] = {
       fingerprint: this.fingerprint(apiKey),
       models: { ...(previous?.models || {}), [model]: entry },
@@ -49,6 +59,10 @@ class GeminiModelStatus {
       try { writeJson(this.filePath, this.data); fs.chmodSync(this.filePath, 0o600); }
       catch (error) { console.warn("Could not save Gemini model status:", error.code || error.message); }
     }
+  }
+
+  retryUntil(guildId, apiKey, model) {
+    return this.state(guildId, apiKey)?.models?.[model]?.retryUntil || 0;
   }
 
   snapshot(guildId, apiKey, models, now = Date.now()) {
@@ -63,4 +77,4 @@ class GeminiModelStatus {
   }
 }
 
-module.exports = { GeminiModelStatus, failureKind, errorStatus };
+module.exports = { GeminiModelStatus, failureKind, errorStatus, retryDelay };

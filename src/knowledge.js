@@ -90,7 +90,11 @@ class KnowledgeBase {
       rootId=excluded.rootId, channelName=excluded.channelName, authorId=excluded.authorId,
       vector=CASE WHEN messages.content=excluded.content AND messages.channelName=excluded.channelName THEN messages.vector ELSE NULL END,
       vectorModel=CASE WHEN messages.content=excluded.content AND messages.channelName=excluded.channelName THEN messages.vectorModel ELSE NULL END,
-      content=excluded.content, editedTimestamp=excluded.editedTimestamp, pinned=excluded.pinned, replyToId=excluded.replyToId, sourceType=excluded.sourceType`).run(
+      content=excluded.content, editedTimestamp=excluded.editedTimestamp, pinned=excluded.pinned, replyToId=excluded.replyToId, sourceType=excluded.sourceType
+      WHERE messages.rootId IS NOT excluded.rootId OR messages.channelName IS NOT excluded.channelName
+        OR messages.authorId IS NOT excluded.authorId OR messages.content IS NOT excluded.content
+        OR messages.editedTimestamp IS NOT excluded.editedTimestamp OR messages.pinned IS NOT excluded.pinned
+        OR messages.replyToId IS NOT excluded.replyToId OR messages.sourceType IS NOT excluded.sourceType`).run(
       message.id, message.guildId, message.channelId, message.rootId, message.channelName || message.channelId,
       message.authorId || "", message.content, message.createdTimestamp || Date.now(), message.editedTimestamp || null,
       `https://discord.com/channels/${message.guildId}/${message.channelId}/${message.id}`, message.pinned ? 1 : 0, message.replyToId || null, message.sourceType || 'discord');
@@ -99,7 +103,9 @@ class KnowledgeBase {
     if (message.partial) return false;
     const decision = this.indexDecision(message);
     if (!decision.allowed) {
-      const removed = this.remove(message);
+      // A repeatedly observed excluded message is still a sequence boundary.
+      // Removing/reinserting that boundary would dirty the entire channel again.
+      const removed = Boolean(this.db.prepare('DELETE FROM messages WHERE id=?').run(message.id).changes);
       const roots = this.guildSettings.get(message.guildId).knowledgeChannelIds;
       if (message.channel?.type !== 12 && (roots.includes(message.channelId) || roots.includes(message.channel?.parentId))) this.groups.boundary(message);
       return removed;

@@ -15,7 +15,7 @@ class KnowledgeIndexer {
   credentials(guildId) {
     const settings = this.settings.get(guildId);
     const provider = settings.aiProvider === "openai" ? "openai" : "gemini";
-    return { provider, apiKey: provider === "openai" ? this.secrets.getOpenAiKey(guildId) : this.secrets.getGeminiKey(guildId), model: settings.openAiModel };
+    return { provider, apiKey: provider === "openai" ? this.secrets.getOpenAiKey(guildId) : this.secrets.getGeminiKey(guildId), model: settings.openAiModel, scopeId: guildId };
   }
   reportStatuses(guildIds) {
     const reports = {};
@@ -70,7 +70,12 @@ class KnowledgeIndexer {
     if (!consume(latest)) return;
     const ids = [...latest.keys()].sort((a, b) => BigInt(a) < BigInt(b) ? -1 : 1);
     if (!state.latest) { state.latest = ids.at(-1) || null; state.before = ids[0] || null; state.complete = ids.length < 100; state.caughtUp = true; }
-    else {
+    else if (!ids.length || BigInt(state.latest) >= BigInt(ids[0])) {
+      // The latest page already covers the checkpoint: a second after-fetch
+      // would download the same messages (or an empty page).
+      if (ids.length && BigInt(ids.at(-1)) > BigInt(state.latest)) state.latest = ids.at(-1);
+      state.caughtUp = true;
+    } else {
       // Walk forward from the last checkpoint, so busy/offline periods cannot skip messages.
       const batch = await channel.messages.fetch({ limit: 100, after: state.latest, cache: false });
       if (!consume(batch)) return;

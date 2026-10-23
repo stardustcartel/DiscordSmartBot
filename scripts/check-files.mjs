@@ -137,6 +137,11 @@ try {
   assert.equal(found.length,1);
   assert.match(found[0].content,/direct answer/);
   assert.equal((await worker.validate(a,{id:'1559282610063278270',isThread:()=>false},found)).length,1);
+  let validationRequests=0;
+  worker.remote=async(_guild,body)=>{if(body.action==='validate'){validationRequests++;return{valid:true};}return{ok:true};};
+  const sectionsFromSameFile=[found[0],{...found[0],part:1},{...found[0],part:2}];
+  assert.equal((await worker.validate(a,{id:'1559282610063278270',isThread:()=>false},sectionsFromSameFile)).length,3);
+  assert.equal(validationRequests,1,'Several sections of the same revision share one fresh visibility check');
   assert.equal((await worker.search(b,{id:'1559282610063278270',isThread:()=>false},'direct answer transcript',{searchPlan:{queries:[]}})).length,0);
   knowledgeDb.close();
 } finally {fs.rmSync(temp,{recursive:true,force:true});}
