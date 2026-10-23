@@ -2,6 +2,10 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.8.0", at: "2026-10-23T01:25:01Z", historical: false, changes: [
+    "Added authorized Version History editing and star highlights, with a smooth purple glow for important updates. Edited descriptions retain their original version and release timestamp.",
+    "Saved release edits and highlights persist across dashboard refreshes and software updates. Shared history changes are permission-checked on the server and text edits and highlights leave an audit trail."
+  ] },
   { version: "2.7.0", at: "2026-10-23T00:44:09Z", historical: false, changes: [
     "Accelerated knowledge searches and follow-ups by sharing overlapping Discord history reads, processing independent channels concurrently, and avoiding repeated indexing of unchanged messages.",
     "Reduced duplicate channel and document checks while retaining source freshness, permissions, citation checks, and conversation context. Gemini now temporarily prioritizes available models after rate limits or outages.",

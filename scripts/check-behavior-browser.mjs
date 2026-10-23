@@ -24,7 +24,8 @@ try {
       if (p.endsWith('/behavior')) { const body = route.request().postDataJSON(); settings = { ...settings, ...body }; return json({ ok: true, ...body }); }
       if (p === '/api/releases') {
         if (route.request().method() === 'DELETE') { entries = entries.filter(r => r.version !== route.request().postDataJSON().version); return json({ ok: true }); }
-        return json({ releases: entries, canDelete: owner });
+        if (route.request().method() === 'PATCH') { const body = route.request().postDataJSON(); const entry = entries.find(r=>r.version === body.version); if (body.changes) entry.changes = body.changes; if (typeof body.highlighted === 'boolean') entry.highlighted=body.highlighted; return json({ok:true,...body}); }
+        return json({ releases: entries, canDelete: owner, canEdit: owner });
       }
       if (p.startsWith('/api/')) return json({});
       const file = path.resolve('dashboard', p === '/' ? 'index.html' : p.slice(1));
@@ -67,6 +68,37 @@ try {
     await page.locator('#version-history-tab').click();
     await page.locator('.release-entry').first().waitFor();
     assert.equal(await page.locator('.release-major').first().textContent(), '2.0');
+    const first = page.locator('.release-entry').first(), originalDate = await first.locator('time').getAttribute('datetime');
+    assert.deepEqual(await first.locator('.release-actions button').evaluateAll(nodes=>nodes.map(n=>n.className)),['release-tool release-edit','release-tool release-star','release-remove']);
+    await first.locator('.release-star').click();
+    await page.waitForFunction(()=>document.querySelector('.release-entry').classList.contains('release-highlighted'));
+    assert.equal(await first.locator('.release-star').getAttribute('aria-pressed'),'true');
+    await first.locator('.release-edit').click();
+    assert.equal(await first.locator('button[type=submit]').isDisabled(),true);
+    await first.locator('textarea').fill('   ');
+    assert.equal(await first.locator('button[type=submit]').isDisabled(),true);
+    await first.locator('textarea').fill('Edited update for clients.\nLiteral <img src=x onerror=alert(1)> text.');
+    await first.locator('button[type=submit]').click();
+    await first.locator('.release-editor').waitFor({state:'detached'});
+    assert.equal(await first.locator('time').getAttribute('datetime'),originalDate);
+    assert.equal(await first.locator('.release-content p').count(),2);
+    assert.equal(await first.locator('.release-content img').count(),0,'Edits render as plain text, not executable HTML');
+    await first.locator('.release-edit').click();
+    await first.locator('textarea').fill('Discard this change');
+    await first.locator('textarea').press('Escape');
+    assert.equal(await first.locator('.release-content p').first().textContent(),'Edited update for clients.');
+    await page.locator('#version-history-tab').click();
+    await first.locator('.release-star[aria-pressed=true]').waitFor();
+    assert.equal(await first.locator('.release-content p').first().textContent(),'Edited update for clients.','Saved overrides survive reloads');
+    owner = false;
+    await page.locator('#version-history-tab').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.release-tool').length===0);
+    assert.equal(await first.evaluate(node=>node.classList.contains('release-highlighted')),true,'Highlights are visible to ordinary signed-in users');
+    owner = true;
+    await page.locator('#version-history-tab').click();
+    await first.locator('.release-star').waitFor();
+    await page.waitForTimeout(450);
+    await first.screenshot({path:path.join(output,`highlight-${width}.png`)});
     await page.screenshot({ path: path.join(output, `releases-${width}.png`), fullPage: true });
     const before = await page.locator('.release-entry').count();
     page.once('dialog', dialog => dialog.dismiss());
@@ -78,6 +110,7 @@ try {
     owner = false;
     await page.locator('#version-history-tab').click();
     await page.waitForFunction(() => document.querySelectorAll('.release-entry').length > 0 && document.querySelectorAll('.release-remove').length === 0);
+    assert.equal(await page.locator('.release-tool').count(),0,'Ordinary viewers have no edit or highlight controls');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     assert.deepEqual(errors, []);
     await page.close();
