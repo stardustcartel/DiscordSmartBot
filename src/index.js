@@ -26,6 +26,7 @@ const { PatreonKnowledge } = require("./patreon");
 const { FilesKnowledge } = require("./files-knowledge");
 const { effectivePolicy, directClockAnswer, simpleGreeting, insufficientEvidence } = require("./knowledge-policy");
 const { ReminderStore } = require("./reminders");
+const { reminderCommand, registerPrivateReminders, ReminderCommands } = require('./reminder-commands');
 const { YouTubeNotifier, fetchYouTubeFeed, resolveYouTubeChannel } = require("./youtube");
 const { createDashboard } = require("./dashboard");
 const { DashboardSync } = require("./dashboard-sync");
@@ -66,6 +67,7 @@ const reminders = new ReminderStore({
   ...config,
   reminderDefaultTimeZone: config.defaultReminderTimeZone,
 });
+const reminderCommands = new ReminderCommands(reminders, getSettingsForGuild);
 const youtube = new YouTubeNotifier({
   guildSettings,
   knowledgeStore: knowledge,
@@ -115,31 +117,7 @@ const serverCommands = [
     .setDescription("Backfill this server's configured knowledge channels")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-  new SlashCommandBuilder()
-    .setName("remind")
-    .setDescription("Create a private DM reminder")
-    .setDMPermission(false)
-    .addStringOption((option) =>
-      option
-        .setName("message")
-        .setDescription("What should I remind you about?")
-        .setRequired(true)
-        .setMaxLength(1_000),
-    )
-    .addStringOption((option) =>
-      option
-        .setName("when")
-        .setDescription("30 mins, in 2 hrs, or tomorrow at noon PST")
-        .setRequired(true)
-        .setMaxLength(100),
-    )
-    .addStringOption((option) =>
-      option
-        .setName("time-zone")
-        .setDescription("Optional: PST, EST, UTC, or an IANA time zone")
-        .setRequired(false)
-        .setMaxLength(50),
-    ),
+  reminderCommand(),
   new SlashCommandBuilder()
     .setName("youtube")
     .setDescription("Announce new uploads from YouTube channels")
@@ -628,30 +606,7 @@ async function handleAiStatusInteraction(interaction) {
 }
 
 async function handleReminderInteraction(interaction) {
-  const settings = getSettingsForGuild(interaction.guildId);
-  const reminder = reminders.add({
-    userId: interaction.user.id,
-    text: interaction.options.getString("message", true).trim(),
-    timeZone:
-      interaction.options.getString("time-zone")?.trim() ||
-      settings.reminderTimeZone,
-    when: interaction.options.getString("when", true).trim(),
-  });
-  if (!reminder) {
-    await interaction.reply({
-      content:
-        "I could not understand that time. Try 30 mins, in 2 hrs, or tomorrow at noon PST.",
-      ephemeral: true,
-    });
-    return;
-  }
-  await interaction.reply(
-    "Got it. I will DM you <t:" +
-      Math.floor(reminder.dueAt / 1_000) +
-      ":F> (<t:" +
-      Math.floor(reminder.dueAt / 1_000) +
-      ":R>) with that reminder.",
-  );
+  return reminderCommands.create(interaction);
 }
 
 async function handleRestartInteraction(interaction) {
@@ -1022,6 +977,7 @@ async function handleSetupInteraction(interaction) {
 }
 
 async function handleInteraction(interaction) {
+  if (interaction.isButton() && interaction.customId.startsWith('reminder:')) return reminderCommands.button(interaction);
   if (interaction.isModalSubmit()) {
     if (interaction.customId === "setup-gemini-api-key") {
       return handleSetupGeminiKeyModal(interaction);
@@ -1170,8 +1126,11 @@ async function registerGuildCommands(guild) {
 client.once(Events.ClientReady, (readyClient) => {
   (async () => {
     console.log("Logged in as " + readyClient.user.tag);
-    await readyClient.application.commands.set([]);
-    console.log("Removed the duplicate global /chat command; /chat remains available in servers.");
+    try { await registerPrivateReminders(readyClient); }
+    catch (error) {
+      // A portal/configuration issue must never take existing server bots down.
+      console.warn('Private /remind registration failed; existing server commands remain available:', error.code || error.status || error.name);
+    }
     const results = await Promise.allSettled(
       [...client.guilds.cache.values()].map((guild) => registerGuildCommands(guild)),
     );

@@ -1,10 +1,11 @@
 {
   "name": "discord-smart-bot",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "private": true,
   "description": "A shared Discord bot with per-server Gemini or OpenAI settings",
   "main": "src/index.js",
   "scripts": {
+    "check:reminders": "node --check src/reminder-commands.js && node --no-warnings scripts/check-reminders.cjs",
     "check:workflow-latency": "node --no-warnings scripts/check-workflow-latency.cjs",
     "check:knowledge-automated": "node --no-warnings scripts/check-knowledge-automated.cjs",
     "check:knowledge-announcements": "node --no-warnings scripts/check-knowledge-announcements.cjs",

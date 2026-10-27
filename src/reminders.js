@@ -1,4 +1,6 @@
 const path = require("node:path");
+const fs = require("node:fs");
+const { randomUUID } = require("node:crypto");
 const { readJson, writeJson } = require("./storage");
 
 const fixedOffsets = {
@@ -167,6 +169,7 @@ class ReminderStore {
   constructor(config) {
     this.defaultTimeZone = config.reminderDefaultTimeZone;
     this.filePath = path.join(config.dataDirectory, "reminders.json");
+    this.eventsPath = path.join(config.dataDirectory, "reminder-events.jsonl");
     this.reminders = readJson(this.filePath, []);
     if (!Array.isArray(this.reminders)) this.reminders = [];
     this.processing = false;
@@ -175,6 +178,76 @@ class ReminderStore {
 
   save() {
     writeJson(this.filePath, this.reminders);
+    fs.chmodSync(this.filePath, 0o600);
+  }
+
+  event(event, reminder, details = {}) {
+    try {
+      fs.appendFileSync(this.eventsPath, JSON.stringify({ at: new Date().toISOString(), event, reminderId: reminder.id, creatorId: reminder.userId, channelId: reminder.channelId || null, guildId: reminder.guildId || null, ...details }) + "\n", { mode: 0o600 });
+      fs.chmodSync(this.eventsPath, 0o600);
+    } catch (error) { console.warn("Could not record reminder activity:", error.code || "unknown"); }
+  }
+
+  addGroup({ userId, text, when, timeZone, recipientIds, channelId, guildId = null }) {
+    const dueAt = parseReminderTime(when, Date.now(), timeZone || this.defaultTimeZone);
+    if (!dueAt) return null;
+    const ids = [...new Set(recipientIds)];
+    if (!ids.length || ids.length > 10 || ids.some(id => !/^\d{15,25}$/.test(id))) throw new Error("Choose between 1 and 10 people.");
+    if (this.reminders.filter(item => item.userId === userId && item.recipients).length >= 50) throw new Error("You already have 50 active shared reminders. Wait for one to finish before creating another.");
+    const reminder = { id: randomUUID(), userId, text, dueAt, createdAt: Date.now(), channelId, guildId,
+      recipients: ids.map(id => ({ userId: id, status: id === userId ? "accepted" : "pending", attempts: 0 })) };
+    this.reminders.push(reminder); this.save();
+    this.event("created", reminder, { dueAt, recipientIds: ids });
+    return reminder;
+  }
+
+  group(id, channelId, guildId) {
+    return this.reminders.find(item => item.id === id && item.recipients && item.channelId === channelId && (item.guildId || null) === (guildId || null));
+  }
+
+  consent(reminder, userId, accepted) {
+    if (!this.reminders.includes(reminder) || reminder.dueAt <= Date.now()) throw new Error("This reminder has already reached its scheduled time or is no longer active.");
+    const recipient = reminder.recipients.find(item => item.userId === userId);
+    if (!recipient) throw new Error("You were not selected for this reminder.");
+    if (recipient.status === (accepted ? "accepted" : "declined")) return false;
+    recipient.status = accepted ? "accepted" : "declined";
+    this.save(); this.event(accepted ? "accepted" : "declined", reminder, { recipientId: userId });
+    return true;
+  }
+
+  cancelGroup(reminder, userId) {
+    if (reminder.userId !== userId) throw new Error("Only the person who created this reminder can cancel it for everyone.");
+    this.reminders = this.reminders.filter(item => item !== reminder);
+    this.save(); this.event("cancelled", reminder);
+  }
+
+  async processGroup(client, reminder, now) {
+    for (const recipient of reminder.recipients) {
+      if (!this.reminders.includes(reminder)) return true;
+      if (recipient.status === "pending") {
+        recipient.status = "expired";
+        this.event("acceptance_expired", reminder, { recipientId: recipient.userId });
+      }
+      if (recipient.status !== "accepted" || recipient.nextAttemptAt > now) continue;
+      try {
+        const user = await client.users.fetch(recipient.userId);
+        if (!this.reminders.includes(reminder)) return true;
+        if (user.bot) throw Object.assign(new Error("Recipient is a bot"), { code: "BOT_RECIPIENT" });
+        await user.send({ content: `Reminder from <@${reminder.userId}>: ${reminder.text}`, allowedMentions: { parse: [] } });
+        recipient.status = "delivered";
+        this.event("delivered", reminder, { recipientId: recipient.userId });
+      } catch (error) {
+        recipient.attempts++;
+        recipient.status = recipient.attempts >= 3 ? "failed" : "accepted";
+        recipient.nextAttemptAt = now + 60_000;
+        this.event(recipient.status === "failed" ? "delivery_failed" : "delivery_retry", reminder, { recipientId: recipient.userId, attempts: recipient.attempts, code: String(error.code || error.status || "unknown") });
+      }
+      // Persist each person's result so one blocked DM never re-sends the
+      // reminder to people whose deliveries already succeeded.
+      this.save();
+    }
+    this.save();
+    return reminder.recipients.every(item => item.status !== "accepted" && item.status !== "pending");
   }
 
   add({ userId, text, when, timeZone }) {
@@ -198,8 +271,9 @@ class ReminderStore {
   }
 
   start(client) {
-    this.timer = setInterval(() => this.processDue(client), 15_000);
-    this.processDue(client);
+    const run = () => this.processDue(client).catch(error => console.error('Reminder processing failed:', error.code || error.name));
+    this.timer = setInterval(run, 15_000);
+    run();
   }
 
   stop() {
@@ -215,6 +289,10 @@ class ReminderStore {
       const due = this.reminders.filter((item) => item.dueAt <= now);
       const completed = new Set();
       for (const reminder of due) {
+        if (reminder.recipients) {
+          if (await this.processGroup(client, reminder, now)) completed.add(reminder.id);
+          continue;
+        }
         try {
           const user = await client.users.fetch(reminder.userId);
           await user.send({

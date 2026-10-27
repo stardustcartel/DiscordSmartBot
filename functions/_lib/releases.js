@@ -2,6 +2,11 @@
 // Earlier version labels were assigned when Version History was introduced;
 // their timestamps are Git records, not confirmed deployment times.
 export const releases = [
+  { version: "2.9.0", at: "2026-10-27T19:34:35Z", historical: false, changes: [
+    "Added /remind support for existing DMs and group DMs through Add to My Apps, without enabling group AI chat or duplicate server commands.",
+    "Choose who receives private reminders using optional recipient fields. Selected people accept individually; recipients can opt out and the creator can cancel. Leaving recipients empty still reminds only you.",
+    "Shared reminders retain acceptance and delivery state after restarts, retry blocked deliveries separately, and record private activity logs. This feature does not use AI credits."
+  ] },
   { version: "2.8.0", at: "2026-10-23T01:25:01Z", historical: false, changes: [
     "Added authorized Version History editing and star highlights, with a smooth purple glow for important updates. Edited descriptions retain their original version and release timestamp.",
     "Saved release edits and highlights persist across dashboard refreshes and software updates. Shared history changes are permission-checked on the server and text edits and highlights leave an audit trail."

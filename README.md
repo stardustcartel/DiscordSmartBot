@@ -44,9 +44,13 @@ bot needs the Change Nickname permission to set the server nickname.
 - /chat: chat with the AI
 - /setup: server-manager configuration for profile, personality, knowledge, and limits
 - /knowledge-search, /knowledge-status, /knowledge-sync
-- /remind: private DM reminder
+- /remind: private DM reminder. Leave `notify` fields empty for yourself, or select up to 10 people using `notify`, `notify-2`, etc. Selected people other than the creator must accept using the reminder's button before it is due. Recipients can opt out; the creator can cancel the shared reminder. Each delivery is a separate private DM, subject to the recipient's Discord privacy settings.
 - /update role: generic role assignment for members with Manage Roles
 - /restart: restricted to service-owner Discord IDs in BOT_OWNER_IDS
+
+`/remind` also supports user installation for existing DMs/group DMs. Install TheSmartBot with **Add to My Apps** before using it there. The global command is restricted to DM/private-channel contexts to avoid duplicate server commands. It does not enable group chat, read group history, use an AI provider, or require a server selection. No full group-member roster is fetched; recipients are explicitly selected through Discord's user options and opt in individually.
+
+Reminder records (including consent and per-recipient retry state) are saved in `data/reminders.json`; private metadata-only activity logs are in `data/reminder-events.jsonl`. Existing self-only reminder records remain supported. DMs are checked every 15 seconds; failed deliveries retry up to three times, independently for each recipient. Use `npm run check:reminders` for fixture-only regression checks.
 
 Server-linked DMs are available when a server manager enables them in Customize Bot.
 The bot verifies membership and configured role access, asks the user to select a
